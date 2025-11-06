@@ -1,0 +1,14 @@
+docker build -t magenta_env .
+
+docker run --platform linux/amd64 -it --rm \
+    -v $(pwd)/magenta_models:/magenta_models \
+    -v $(pwd)/magenta_output:/magenta_output \
+    magenta_env
+
+melody_rnn_generate \
+    --config=attention_rnn \
+    --bundle_file=/magenta_models/attention_rnn.mag \
+    --output_dir=/magenta_output \
+    --num_outputs=1 \
+    --num_steps=64 \
+    --primer_melody="[60]"
