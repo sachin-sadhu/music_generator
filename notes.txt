@@ -108,11 +108,11 @@ melody_rnn_generate \
   ## Performance RNN
 
 performance_rnn_generate \
-  --config=performance_with_dynamics \
-  --bundle_file=/magenta_models/performance_with_dynamics.mag \
+  --config=performance \
+  --bundle_file=/magenta_models/performance.mag \
+  --temperature=0.8 \
   --output_dir=/magenta_output/performance \
   --num_outputs=3 \
   --num_steps=500 \
-  --primer_melody="[60,62,64,65,67,69,71,72]" \
-  --pitch_class_histogram="[2, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1]"
+  --primer_melody="[60,62,64,65,67,69,71,72]"
 
