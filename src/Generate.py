@@ -361,4 +361,14 @@ class GenerateSequence:
             current_time = note_start_ticks + duration_ticks
         
         # Save the file
-        
+        mid.save(filename)
+        print(f"MIDI file saved as {filename}")
+
+if __name__ == "__main__":
+    melody_model = NoteTraining.load()
+    chord_model = ChordTransitionModel.load()
+    generator = GenerateSequence(melody_model, chord_model, "F:maj")
+    print(generator._get_next_chord())
+    #notes = generator.generate_sequence(16, 'yeet')
+    #print(notes)
+    #generator.notes_to_midi(notes)

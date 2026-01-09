@@ -119,6 +119,27 @@ def transpose_chord_to_c_major(chord, original_key):
     return transposed_chord
 
 def get_chord_name_in_original_key(roman_numeral: str, key: str):
+    """
+    Convert a Roman numeral chord notation to its actual chord name in a given key.
+
+    This function takes a Roman numeral representation of a chord (e.g., 'V', 'ii', 'vii') 
+    and a key signature, then calculates the actual chord name by transposing the Roman 
+    numeral to the specified key using semitone intervals.
+
+    Args:
+        roman_numeral (str): The Roman numeral representation of the chord (e.g., 'I', 'ii', 
+                            'iii', 'IV', 'V', 'vi', 'vii'). Case indicates chord quality.
+        key (str): The key signature to transpose to (e.g., 'C', 'D#', 'Bb').
+
+    Returns:
+        str: The transposed chord name in the format "root:type" (e.g., "G:maj", "A:min").
+
+    Example:
+        >>> get_chord_name_in_original_key('V', 'C')
+        'G:maj'
+        >>> get_chord_name_in_original_key('ii', 'G')
+        'A:min'
+    """
     roman_numeral_to_semitones = {
         'I': 0,   # Tonic (0 semitones above root)
         'ii': 2,  # 2 semitones above root
@@ -161,9 +182,113 @@ def get_chord_name_in_original_key(roman_numeral: str, key: str):
     return transposed_chord_name
 
 def get_chord_type_from_roman_numeral(roman_numeral: str):
+    """
+    Determines the chord type (major or minor) based on the case of a Roman numeral.
+
+    Args:
+        roman_numeral (str): A Roman numeral string representing a chord (e.g., 'I', 'iv', 'V', 'ii')
+
+    Returns:
+        str: 'maj' if the Roman numeral is uppercase (indicating a major chord),
+             'min' if the Roman numeral is lowercase (indicating a minor chord)
+    """
     if roman_numeral.isupper():
         return 'maj'
     else:
         return 'min'
 
-print(get_chord_name_in_original_key('vii', 'A:maj'))
+def convert_chord_name_to_roman_numeral(chord_name: str):
+    """
+    Convert a chord name to its corresponding Roman numeral notation.
+
+    This function maps chord names in the format 'Note:quality' to their 
+    Roman numeral equivalents in music theory, specifically for the key of C major.
+
+    Args:
+        chord_name (str): The chord name in the format 'Note:quality' 
+                         (e.g., 'C:maj', 'D:min', 'E:min').
+
+    Returns:
+        str: The Roman numeral representation of the chord.
+             - Uppercase Roman numerals (I, IV, V) represent major chords
+             - Lowercase Roman numerals (ii, iii, vi, vii) represent minor/diminished chords
+
+    Raises:
+        ValueError: If the provided chord_name is not found in the mapping.
+
+    Example:
+        >>> convert_chord_name_to_roman_numeral('C:maj')
+        'I'
+        >>> convert_chord_name_to_roman_numeral('D:min')
+        'ii'
+        >>> convert_chord_name_to_roman_numeral('X:maj')
+        ValueError: Invalid chord name: X:maj
+    """
+    chord_to_roman_numeral_mapping = {
+        'C:maj': 'I',
+        'D:min': 'ii',
+        'E:min': 'iii',
+        'F:maj': 'IV',
+        'G:maj': 'V',
+        'A:min': 'vi',
+        'B:dim': 'vii',
+    }
+
+    if chord_name in chord_to_roman_numeral_mapping:
+        return chord_to_roman_numeral_mapping[chord_name]
+    else:
+        raise ValueError(f"Invlaid chord name: {chord_name}")
+
+def is_chord_tone(note_pitch, chord_name):
+    """
+    Determines if a given note pitch is a chord tone of the specified chord.
+
+    Args:
+        note_pitch (int): The MIDI pitch number of the note to check.
+        chord_name (str): The name of the chord in the format 'Root:quality' 
+                         (e.g., 'C:maj', 'A:min', 'G:7').
+
+    Returns:
+        bool: True if the note pitch is a chord tone of the specified chord, 
+              False otherwise.
+
+    Raises:
+        ValueError: If the chord_name is not found in the CHORD_TEMPLATES dictionary.
+
+    Example:
+        >>> is_chord_tone(60, 'C:maj')  # C4 is the root of C major
+        True
+        >>> is_chord_tone(61, 'C:maj')  # C#4 is not in C major
+        False
+        >>> is_chord_tone(64, 'C:maj')  # E4 is the third of C major
+        True
+
+    Note:
+        The function uses pitch class (pitch % 12) to determine if a note belongs
+        to a chord, making it octave-invariant.
+    """
+    CHORD_TEMPLATES = {
+        'C:maj': [0, 4, 7],
+        'C:min': [0, 3, 7],
+        'D:min': [2, 5, 9],
+        'D:maj': [2, 6, 9],
+        'E:min': [4, 7, 11],
+        'E:maj': [4, 8, 11],
+        'F:maj': [5, 9, 0],
+        'F:min': [5, 8, 0],
+        'G:maj': [7, 11, 2],
+        'G:min': [7, 10, 2],
+        'A:min': [9, 0, 4],
+        'A:maj': [9, 1, 4],
+        'B:min': [11, 2, 6],
+        'B:maj': [11, 3, 6],
+        'B:dim': [11, 2, 5],
+        'G:7': [7, 11, 2, 5]
+    }
+
+    if chord_name not in CHORD_TEMPLATES:
+        raise ValueError(f"Invalid chord name: {chord_name} ")
+
+    pitch_class = note_pitch % 12
+
+    return pitch_class in CHORD_TEMPLATES[chord_name];
