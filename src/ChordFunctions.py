@@ -129,7 +129,7 @@ def get_chord_name_in_original_key(roman_numeral: str, key: str):
     Args:
         roman_numeral (str): The Roman numeral representation of the chord (e.g., 'I', 'ii', 
                             'iii', 'IV', 'V', 'vi', 'vii'). Case indicates chord quality.
-        key (str): The key signature to transpose to (e.g., 'C', 'D#', 'Bb').
+        key (str): The key signature to transpose to (e.g., 'C:maj', 'D#:maj', 'Bb:min').
 
     Returns:
         str: The transposed chord name in the format "root:type" (e.g., "G:maj", "A:min").
@@ -254,14 +254,6 @@ def is_chord_tone(note_pitch, chord_name):
 
     Raises:
         ValueError: If the chord_name is not found in the CHORD_TEMPLATES dictionary.
-
-    Example:
-        >>> is_chord_tone(60, 'C:maj')  # C4 is the root of C major
-        True
-        >>> is_chord_tone(61, 'C:maj')  # C#4 is not in C major
-        False
-        >>> is_chord_tone(64, 'C:maj')  # E4 is the third of C major
-        True
 
     Note:
         The function uses pitch class (pitch % 12) to determine if a note belongs
