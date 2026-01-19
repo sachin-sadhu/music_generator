@@ -116,3 +116,42 @@ performance_rnn_generate \
   --num_steps=500 \
   --primer_melody="[60,62,64,65,67,69,71,72]"
 
+prime with shorter or longer pieces
+
+generate bunch of notes with long priming in certain major
+
+talk about findings 
+
+see if adding no priming does anything, repeat experiments
+
+add this to list of experiments
+
+think about it as an experiment
+
+juliana 
+
+see if pretrained HMM model, should exist
+
+document this
+
+find recent markov models, refocus to add hierarchy to music generation
+
+LSTM vs HMM
+
+think about overpwering
+
+generate notes in a key 
+
+evaluate both against each other, analyse both and see which is better
+
+keep work that we do
+
+look at markov model, python graph library
+
+once i have shifted everything to C major,
+
+so i have the key of music i want to play in 
+transition matrix is chord independant, so will need to convert the chord in that 
+key to the chord in C major. what chord model is trained on
+then once new roman numeral chord is sampled (I - IV), will need to convert that back 
+into chord in original key

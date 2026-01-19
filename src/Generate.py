@@ -21,6 +21,7 @@ class GenerateSequence:
         self.chord_transition_matrix = chord_model.transition_probabilities
         self.melody_transmision_matrix = melody_model.melodic_state_transition_probabilities
         self.melody_emission_matrix = melody_model.melodic_emission_probabilities
+        self.chord_note_emission_matrix = melody_model.chord_pitch_probabilities
         self.chord_name_to_roman_numeral_mapping = {
         'C:maj':'I',
         'D:min': 'ii',
@@ -97,34 +98,32 @@ class GenerateSequence:
             - Considers whether intervals are chord tones relative to the current chord
             - The pitch is calculated relative to the current note's pitch
         """
-        curr_melodic_state = self.current_note['melodic_state']
-        curr_meldodic_state_transition_probs = self.melody_transmision_matrix[curr_melodic_state]
-        next_melodic_state = self._sample_value((curr_meldodic_state_transition_probs))
 
-        try:
-            melodic_state_possible_intervals = self._get_state_intervals(next_melodic_state)
-        except ValueError:
-            # Default to ascending
-            melodic_state_possible_intervals = [1,2]
+        note_pitch_class_mapping = {
+            'C': 0, 
+            'C#': 1, 'Db': 1,
+            'D': 2,
+            'D#': 3, 'Eb': 3,
+            'E': 4,
+            'F': 5,
+            'F#': 6, 'Gb': 6,
+            'G': 7,
+            'G#': 8, 'Ab': 8,
+            'A': 9,
+            'A#': 10, 'Bb': 10,
+            'B': 11
+        }
 
-        intervals_probabilities = {}
-
-        for interval in melodic_state_possible_intervals:
-            potential_note_pitch = self.current_note['pitch'] + interval
-            is_ct = is_chord_tone(potential_note_pitch, self.current_chord)
-            melodic_state_emission_probability = self.melody_emission_matrix[next_melodic_state][is_ct][interval]
-            intervals_probabilities[interval] = melodic_state_emission_probability
-
-        norm_probabilities = self._normalise_probabilities(intervals_probabilities)
-        next_pitch_interval = self._sample_value(norm_probabilities)
-        new_note_pitch = self.current_note['pitch'] + next_pitch_interval
+        chord_note_probabilities = self.chord_note_emission_matrix[self.current_chord]
+        next_note = self._sample_value(chord_note_probabilities)
+        next_note_pitch_class = 60 + note_pitch_class_mapping[next_note]
 
         new_note = {
-            'pitch': new_note_pitch,
+            'pitch': next_note_pitch_class,
             'start_time': self.current_note['start_time'] + 1,
             'duration': 1,
             'velocity': 80,
-            'melodic_state': next_melodic_state,
+            'melodic_state': 'ascending',
             'current_chord': self.current_chord
         }
 

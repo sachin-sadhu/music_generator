@@ -1,0 +1,214 @@
+from mido import MidiFile
+from ChordFunctions import *
+
+def load_midi(midi_path):
+    midi = MidiFile(midi_path)
+
+    ticks_per_beat = midi.ticks_per_beat
+    beats_per_bar = 4
+    ticks_per_bar = ticks_per_beat * beats_per_bar
+
+    notes = []
+    active_notes = {}
+    current_tick = 0
+
+    for msg in midi.tracks[1]:
+        current_tick += msg.time
+
+        # Note is being played
+        if msg.type == 'note_on' and msg.velocity > 0:
+            active_notes[msg.note] = {
+                'pitch': msg.note,
+                'start_tick': current_tick,
+                'velocity': msg.velocity
+            }
+        
+        # Note is being turned off
+        elif msg.type == 'note_on' and msg.velocity == 0:
+            if msg.note in active_notes:
+                curr_note = active_notes[msg.note]
+
+                tick_onset = curr_note['start_tick']
+                tick_duration = current_tick - tick_onset
+                beat_duration = tick_duration / ticks_per_beat
+                (bar_index, beat_position) = calculate_beat_position(ticks_per_bar, ticks_per_beat, tick_onset)
+                quantised_beat_position = quantise_beat_position(beat_position)
+                note_type = quantise_beat_duration(beat_duration)
+
+                curr_note['tick_duration'] = tick_duration
+                curr_note['beat_duration'] = beat_duration
+                curr_note['beat_onset'] = quantised_beat_position
+                curr_note['bar_index'] = bar_index
+                curr_note['note_type'] = note_type
+
+                notes.append(curr_note)
+                del active_notes[msg.note]
+
+    # know how many ticks there are in a bar, know tikc onset on current note
+    # therefore doing tick onset % ticks per bar will give onset within the current bar
+    # once we know tick onset, we know how many ticks per beat, therefore can calculate beat position within bar
+
+    return notes
+    #for note in notes[0:100]:
+        #print(note)
+
+def calculate_beat_position(ticks_per_bar, ticks_per_beat, tick_onset):
+    """
+    Calculate the bar index and beat position within a bar for a given tick onset.
+
+    Args:
+        ticks_per_bar (int): The number of ticks in one bar.
+        ticks_per_beat (int): The number of ticks in one beat.
+        tick_onset (int): The absolute tick position to convert.
+
+    Returns:
+        tuple: A tuple containing:
+            - bar_index (int): The zero-based index of the bar.
+            - beat_position_bar (float): The position within the bar expressed in beats.
+    """
+    bar_index = tick_onset // ticks_per_bar
+    tick_onset_within_bar = tick_onset % ticks_per_bar
+    beat_position_bar = tick_onset_within_bar / ticks_per_beat
+    return (bar_index, beat_position_bar)
+
+def quantise_beat_position(beat_position, grid_size=0.5):
+    return round(beat_position / grid_size) * grid_size
+
+def quantise_beat_duration(beat_duration, grid_size=0.5, max_duration=4.0):
+    """
+    Quantise a beat duration to the nearest musical note value.
+
+    Args:
+        beat_duration (float): The duration of the beat to quantise, in beats.
+        grid_size (float, optional): The grid size for quantisation. Defaults to 0.5.
+        max_duration (float, optional): The maximum allowed duration. Defaults to 4.0.
+
+    Returns:
+        str: The name of the musical note value (e.g., 'crotchet', 'quaver', 'semibreve')
+             that best represents the quantised beat duration.
+    """
+    DURATION_BINS = {
+        0.25: 'semiquaver',
+        0.50: 'quaver',
+        0.75: 'dotted_quaver',
+        1.0: 'crotchet',
+        1.5: 'dotted_crotchet',
+        2.0: 'minim',
+        3: 'dotted_minim',
+        4: 'semibreve'
+    }
+
+    quantised = round(beat_duration / grid_size) * grid_size
+
+    if quantised < grid_size:
+        quantised = grid_size
+    if quantised > max_duration:
+        quantised = max_duration
+
+    closest = min(DURATION_BINS.keys(), key=lambda x: abs(x-quantised))
+    return DURATION_BINS[closest]
+
+def get_note_chord_tone(note_midi_pitch, chord):
+    """
+    Determines the relationship of a note to a given chord in terms of intervals and octave offset.
+
+    Args:
+        note_midi_pitch (int): The MIDI pitch value of the note (0-127).
+        chord (str): The chord name (e.g., 'Cmaj', 'Amin').
+
+    Returns:
+        tuple: A tuple containing:
+            - chord_tone (str): The interval name relative to the chord root 
+              (e.g., 'root', '3rd', '5th', 'b7').
+            - octave_offset (int): The number of octaves the note is above or below 
+              the chord root in octave 4.
+
+    Example:
+        >>> get_note_chord_tone(64, 'Cmaj')
+        ('3rd', 0)
+        >>> get_note_chord_tone(72, 'Cmaj')
+        ('root', 1)
+
+    Note:
+        Uses major scale intervals for major chords and minor scale intervals for minor chords.
+        The reference octave for the chord root is octave 4 (middle C = 60).
+    """
+    ## Given chord and a note, wantt o figure out note representation relative to the chord
+    octave_4_note_midi_pitch_mapping = {
+        'C': 60,
+        'C#': 61, 'Db': 61,
+        'D': 62,
+        'D#': 63, 'Eb': 63,
+        'E': 64,
+        'F': 65,
+        'F#': 66, 'Gb': 66,
+        'G': 67,
+        'G#': 68, 'Ab': 68,
+        'A': 69,
+        'A#': 70, 'Bb': 70,
+        'B': 71
+    }
+
+    major_scale_intervals = {
+        0: "root", 1: "b2", 2: "2nd", 3: "b3", 4: "3rd", 5: "4th",
+        6: "b5", 7: "5th", 8: "b6", 9: "6th", 10: "b7", 11: "7th"
+    }
+
+    minor_scale_intervals = {
+        0: "root", 1: "b2", 2: "2nd", 3: "3rd", 4: "#3", 5: "4th",
+        6: "b5", 7: "5th", 8: "6th", 9: "#6", 10: "7th", 11: "#7"
+    }
+
+    (chord_root_note, chord_type) = get_chord_root_and_type(chord)
+
+    pitch_class_name_mapping = major_scale_intervals if chord_type == 'maj' else minor_scale_intervals
+
+    chord_root_midi_pitch = octave_4_note_midi_pitch_mapping[chord_root_note]
+    semitone_offset = note_midi_pitch - chord_root_midi_pitch
+    pitch_class_offset = semitone_offset % 12
+    octave_offset = semitone_offset // 12
+
+    chord_tone = pitch_class_name_mapping[pitch_class_offset]
+
+    return (chord_tone, octave_offset)
+
+def group_notes_by_bar(notes):
+    """
+    Groups musical notes by their bar index.
+
+    This function takes a list of note dictionaries and organizes them into separate
+    lists based on their bar_index value. Each bar is represented as a list of notes
+    that belong to that bar.
+
+    Args:
+        notes (list[dict]): A list of note dictionaries, where each dictionary must
+                           contain a 'bar_index' key indicating which bar the note
+                           belongs to.
+
+    Returns:
+        list[list[dict]]: A list of lists, where each inner list contains all notes
+                         belonging to a specific bar. The outer list index corresponds
+                         to the bar index (e.g., bars[0] contains notes from bar 0).
+    """
+    max_bar = max(note['bar_index'] for note in notes)
+    bars = [[] for _ in range(max_bar+1)]
+
+    for note in notes:
+        current_bar_index = note['bar_index']
+        bars[current_bar_index].append(note)
+
+    return bars
+
+def cap_notes_in_bar(bar_notes, beats_per_bar=4.0):
+    for note in bar_notes:
+        beats_remaining = beats_per_bar - note['beat_onset']
+        if note['beat_duration'] > beats_remaining:
+            note['beat_duration'] = beats_remaining
+            note['note_type'] = quantise_beat_duration(beats_remaining)
+
+path = '/Users/sachin/Documents/music_generator/POP909/043/043.mid'
+notes = load_midi(path)
+bars = group_notes_by_bar(notes)
+for bar in bars:
+    print(bar)
+    print('\n')
