@@ -44,13 +44,7 @@ def load_midi(midi_path):
                 notes.append(curr_note)
                 del active_notes[msg.note]
 
-    # know how many ticks there are in a bar, know tikc onset on current note
-    # therefore doing tick onset % ticks per bar will give onset within the current bar
-    # once we know tick onset, we know how many ticks per beat, therefore can calculate beat position within bar
-
     return notes
-    #for note in notes[0:100]:
-        #print(note)
 
 def calculate_beat_position(ticks_per_bar, ticks_per_beat, tick_onset):
     """
@@ -199,6 +193,101 @@ def group_notes_by_bar(notes):
 
     return bars
 
+def get_all_bar_timings(bars, beats_per_min, beats_per_bar=4.0):
+    def get_bar_timings(bar_index):
+        """
+        Calculate the start and end timings of a musical bar in seconds.
+
+        Args:
+            bar_index (int): The index of the bar (0-based).
+            beats_per_bar (float, optional): Number of beats in a bar. Defaults to 4.0.
+            beats_per_min (float): The tempo in beats per minute (BPM).
+
+        Returns:
+            tuple: A tuple containing two float values:
+                - bar_onset_seconds (float): The start time of the bar in seconds.
+                - bar_finished_seconds (float): The end time of the bar in seconds.
+        """
+        seconds_per_beat = 60 / beats_per_min
+        seconds_per_bar = beats_per_bar * seconds_per_beat
+        bar_onset_seconds = bar_index * seconds_per_bar
+        bar_finished_seconds = bar_onset_seconds + seconds_per_bar
+
+        return bar_onset_seconds, bar_finished_seconds
+
+    bar_timings = [get_bar_timings(i) for i in range(len(bars))]
+    return bar_timings
+
+def assign_chords_to_bars(bar_timings, chord_timings):
+    """
+    Assign chord labels to musical bars based on maximum temporal overlap.
+    This function determines which chord best represents each bar by calculating
+    the overlap duration between each bar's time span and all available chords,
+    then selecting the chord with the maximum overlap for that bar.
+    Args:
+        bar_timings (list of tuple): A list of tuples where each tuple contains
+            (bar_start, bar_end) representing the start and end times of each bar
+            in the musical piece.
+        chord_timings (list of tuple): A list of tuples where each tuple contains
+            (chord_start, chord_end, chord_label) representing the start time,
+            end time, and label of each chord.
+    Returns:
+        list: A list of chord labels corresponding to each bar in bar_timings.
+            Each element is the chord label that has the maximum overlap with
+            the corresponding bar. May contain None if no chord overlaps with a bar.
+    """
+    bar_chords = []
+
+    for bar_start, bar_end in bar_timings:
+        current_max_overlap = 0
+        current_best_chord = None
+
+        for chord_start, chord_end, chord_label in chord_timings:
+            overlap_start = max(bar_start, chord_start)
+            overlap_end = min(bar_end, chord_end)
+
+            overlap_duration = max(0, overlap_end - overlap_start)
+
+            if overlap_duration > current_max_overlap:
+                current_best_chord = chord_label
+                current_max_overlap = overlap_duration
+            
+        bar_chords.append(current_best_chord)
+
+    return bar_chords
+
+def load_chord_timings(chord_file_path):
+    """
+    Load chord timings from a chord annotation file.
+
+    This function reads a chord annotation file where each line contains tab-separated
+    values representing chord timing information and returns a list of chord timing tuples.
+
+    Args:
+        chord_file_path (str): Path to the chord annotation file. The file should contain
+            tab-separated values with at least 3 columns: start time, end time, and chord label.
+
+    Returns:
+        list of tuple: A list of tuples where each tuple contains:
+            - chord_start (float): The start time of the chord in seconds
+            - chord_end (float): The end time of the chord in seconds
+            - chord_label (str): The label/name of the chord
+    """
+    chord_timings = []
+
+    with open(chord_file_path, 'r') as f:
+        for line in f:
+            line = line.strip()
+            parts = line.split('\t')
+
+            if len(parts) >= 3:
+                chord_start = float(parts[0])
+                chord_end = float(parts[1])
+                chord_label = parts[2]
+                chord_timings.append((chord_start, chord_end, chord_label))
+
+    return chord_timings
+
 def cap_notes_in_bar(bar_notes, beats_per_bar=4.0):
     for note in bar_notes:
         beats_remaining = beats_per_bar - note['beat_onset']
@@ -206,9 +295,15 @@ def cap_notes_in_bar(bar_notes, beats_per_bar=4.0):
             note['beat_duration'] = beats_remaining
             note['note_type'] = quantise_beat_duration(beats_remaining)
 
-path = '/Users/sachin/Documents/music_generator/POP909/043/043.mid'
-notes = load_midi(path)
+# Need to assign each bar a chord function
+
+midi_path = '/home/sachin/Documents/music_generator/POP909/POP909/001/001.mid'
+chord_path = '/home/sachin/Documents/music_generator/POP909/POP909/001/chord_midi.txt'
+key_path = '/home/sachin/Documents/music_generator/POP909/POP909/001/key_audio.txt'
+notes = load_midi(midi_path)
 bars = group_notes_by_bar(notes)
-for bar in bars:
-    print(bar)
-    print('\n')
+bar_timings = get_all_bar_timings(bars, 120)
+chord_timings = load_chord_timings(chord_path)
+bars_chords = assign_chords_to_bars(bar_timings, chord_timings)
+print(f'original chords: {bars_chords}')
+print(f'tranposed_chords: {transposed_bar_chords}')

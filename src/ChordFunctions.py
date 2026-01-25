@@ -109,12 +109,15 @@ def transpose_chord_to_c_major(chord, original_key):
         str: The transposed chord in C major, formatted as "note:type"
              (e.g., "C:maj", "A:min").
     """
-    original_key = original_key.split(':')[0]
-    num_semitones_to_shift = calc_semitones_to_c(original_key)
+    try:
+        original_key = original_key.split(':')[0]
+        num_semitones_to_shift = calc_semitones_to_c(original_key)
 
-    (chord_root_note, chord_type) = get_chord_root_and_type(chord)
-    transposed_chord_root_note = transpose_note(chord_root_note, num_semitones_to_shift)
-    transposed_chord = f'{transposed_chord_root_note}:{chord_type}'
+        (chord_root_note, chord_type) = get_chord_root_and_type(chord)
+        transposed_chord_root_note = transpose_note(chord_root_note, num_semitones_to_shift)
+        transposed_chord = f'{transposed_chord_root_note}:{chord_type}'
+    except exception as e:
+        raise ValueError(f"Error transposing: {e}")
 
     return transposed_chord
 
