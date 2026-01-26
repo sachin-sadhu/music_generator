@@ -1,5 +1,38 @@
 from mido import MidiFile
 from ChordFunctions import *
+import os
+
+def load_songs(directory):
+    songs_bars = []
+    songs_bars_chords = []
+
+    for song_dir in sorted(os.listdir(directory)):
+        song_path = os.path.join(directory, song_dir)
+
+        if not os.path.isdir(song_path):
+            continue
+    
+        midi_file = os.path.join(song_path, f"{song_dir}.mid")
+        chord_file = os.path.join(song_path, "chord_midi.txt")
+        key_file = os.path.join(song_path, "key_audio.txt")
+
+        if all(os.path.exists(file) for file in [midi_file, chord_file, key_file]):
+            try:
+                notes = load_midi(midi_file)
+                bars = group_notes_by_bar(notes)
+                bar_timings = get_all_bar_timings(bars, 120)
+                chord_timings = load_chord_timings(chord_file)
+                bars_chords_mapped = assign_chords_to_bars(bar_timings, chord_timings)
+
+                for i in range(len(bars)):
+                    songs_bars.append(bars[i])
+                    songs_bars_chords.append(bars_chords_mapped)
+            except Exception as e:
+                print(f"Error loading song {song_dir}: {e}")
+        else:
+            print(f"Missing file for song {song_dir}")
+
+    return songs_bars, songs_bars_chords
 
 def load_midi(midi_path):
     midi = MidiFile(midi_path)
@@ -297,13 +330,17 @@ def cap_notes_in_bar(bar_notes, beats_per_bar=4.0):
 
 # Need to assign each bar a chord function
 
-midi_path = '/home/sachin/Documents/music_generator/POP909/POP909/001/001.mid'
-chord_path = '/home/sachin/Documents/music_generator/POP909/POP909/001/chord_midi.txt'
-key_path = '/home/sachin/Documents/music_generator/POP909/POP909/001/key_audio.txt'
-notes = load_midi(midi_path)
-bars = group_notes_by_bar(notes)
-bar_timings = get_all_bar_timings(bars, 120)
-chord_timings = load_chord_timings(chord_path)
-bars_chords = assign_chords_to_bars(bar_timings, chord_timings)
-print(f'original chords: {bars_chords}')
-print(f'tranposed_chords: {transposed_bar_chords}')
+#midi_path = '/home/sachin/Documents/music_generator/POP909/POP909/001/001.mid'
+#chord_path = '/home/sachin/Documents/music_generator/POP909/POP909/001/chord_midi.txt'
+#key_path = '/home/sachin/Documents/music_generator/POP909/POP909/001/key_audio.txt'
+#notes = load_midi(midi_path)
+#bars = group_notes_by_bar(notes)
+#bar_timings = get_all_bar_timings(bars, 120)
+#chord_timings = load_chord_timings(chord_path)
+#bars_chords = assign_chords_to_bars(bar_timings, chord_timings)
+#print(f'original chords: {bars_chords}')
+
+directory = '/home/sachin/Documents/music_generator/test_data/'
+bars, bars_chords = load_songs(directory)
+print(f'bars: {bars}. chords: {bars_chords}')
+print(len(bars), len(bars_chords))

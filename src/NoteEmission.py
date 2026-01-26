@@ -224,7 +224,7 @@ observations = [
         ('root', 0, 'quaver', 0.0),
         ('3rd', 0, 'quaver', 0.5),
         ('5th', 0, 'quaver', 1.0),
-        ('octave', 1, 'quaver', 1.5),
+        ('octave', 0, 'quaver', 1.5),
         ('5th', 0, 'quaver', 2.0),
         ('3rd', 0, 'quaver', 2.5),
         ('root', 0, 'quaver', 3.0),
@@ -234,7 +234,7 @@ observations = [
         ('root', 0, 'quaver', 0.0),
         ('3rd', 0, 'quaver', 0.5),
         ('5th', 0, 'quaver', 1.0),
-        ('octave', 1, 'quaver', 1.5),
+        ('octave', 0, 'quaver', 1.5),
         ('5th', 0, 'quaver', 2.0),
         ('3rd', 0, 'quaver', 2.5),
         ('root', 0, 'quaver', 3.0),
@@ -244,17 +244,17 @@ observations = [
         ('root', 0, 'quaver', 0.0),
         ('3rd', 0, 'quaver', 0.5),
         ('5th', 0, 'quaver', 1.0),
-        ('octave', 1, 'quaver', 1.5),
+        ('octave', 0, 'quaver', 1.5),
         ('5th', 0, 'quaver', 2.0),
         ('3rd', 0, 'quaver', 2.5),
-        ('octave', 1, 'quaver', 3.0),
+        ('octave', 0, 'quaver', 3.0),
         ('5th', 0, 'quaver', 3.5),
     ],
     [
         ('root', 0, 'quaver', 0.0),
         ('3rd', 0, 'quaver', 0.5),
         ('5th', 0, 'quaver', 1.0),
-        ('octave', 1, 'quaver', 1.5),
+        ('octave', 0, 'quaver', 1.5),
         ('5th', 0, 'quaver', 2.0),
         ('3rd', 0, 'quaver', 2.5),
         ('root', 0, 'quaver', 3.0),
@@ -264,7 +264,7 @@ observations = [
         ('root', 0, 'quaver', 0.0),
         ('3rd', 0, 'quaver', 0.5),
         ('5th', 0, 'quaver', 1.0),
-        ('octave', 1, 'quaver', 1.5),
+        ('octave', 0, 'quaver', 1.5),
         ('5th', 0, 'quaver', 2.0),
         ('3rd', 0, 'quaver', 2.5),
         ('root', 0, 'quaver', 3.0),
@@ -274,7 +274,7 @@ observations = [
         ('root', 0, 'quaver', 0.0),
         ('3rd', 0, 'quaver', 0.5),
         ('5th', 0, 'quaver', 1.0),
-        ('octave', 1, 'quaver', 1.5),
+        ('octave', 0, 'quaver', 1.5),
         ('5th', 0, 'quaver', 2.0),
         ('3rd', 0, 'quaver', 2.5),
         ('root', 0, 'quaver', 3.0),
@@ -284,7 +284,7 @@ observations = [
         ('root', 0, 'quaver', 0.0),
         ('3rd', 0, 'quaver', 0.5),
         ('5th', 0, 'quaver', 1.0),
-        ('octave', 1, 'quaver', 1.5),
+        ('octave', 0, 'quaver', 1.5),
         ('5th', 0, 'quaver', 2.0),
         ('3rd', 0, 'quaver', 2.5),
         ('root', 0, 'quaver', 3.0),
@@ -294,7 +294,7 @@ observations = [
         ('root', 0, 'quaver', 0.0),
         ('3rd', 0, 'quaver', 0.5),
         ('5th', 0, 'quaver', 1.0),
-        ('octave', 1, 'quaver', 1.5),
+        ('octave', 0, 'quaver', 1.5),
         ('5th', 0, 'quaver', 2.0),
         ('3rd', 0, 'quaver', 2.5),
         ('root', 0, 'quaver', 3.0),
@@ -304,7 +304,7 @@ observations = [
         ('root', 0, 'quaver', 0.0),
         ('3rd', 0, 'quaver', 0.5),
         ('5th', 0, 'quaver', 1.0),
-        ('octave', 1, 'quaver', 1.5),
+        ('octave', 0, 'quaver', 1.5),
         ('5th', 0, 'quaver', 2.0),
         ('3rd', 0, 'quaver', 2.5),
         ('root', 0, 'quaver', 3.0),
@@ -384,12 +384,12 @@ def get_song_pattern_assignments(model, observations, bar_chord_functions):
 def get_note_midi_pitch(chord_tone, chord_roman_numeral, key, octave_offset=0):
     major_scale_intervals_inverted = {
         "root": 0, "b2": 1, "2nd": 2, "b3": 3, "3rd": 4, "4th": 5,
-        "b5": 6, "5th": 7, "b6": 8, "6th": 9, "b7": 10, "7th": 11
+        "b5": 6, "5th": 7, "b6": 8, "6th": 9, "b7": 10, "7th": 11, "octave": 12
     }
 
     minor_scale_intervals_inverted = {
         "root": 0, "b2": 1, "2nd": 2, "3rd": 3, "#3": 4, "4th": 5,
-        "b5": 6, "5th": 7, "6th": 8, "#6": 9, "7th": 10, "#7": 11
+        "b5": 6, "5th": 7, "6th": 8, "#6": 9, "7th": 10, "#7": 11, "octave": 12
     }
 
     roman_numeral_to_semitones = {
@@ -426,6 +426,8 @@ def get_note_midi_pitch(chord_tone, chord_roman_numeral, key, octave_offset=0):
     interval_mapping = major_scale_intervals_inverted if key_type.isupper() else minor_scale_intervals_inverted
 
     # Calculate final note pitch
+
+    print(f'chord tone: {chord_tone}')
     note_midi_pitch = chord_root_note_midi_pitch + interval_mapping.get(chord_tone) + (octave_offset * 12)
 
     return note_midi_pitch
@@ -461,7 +463,7 @@ def build_pattern_bars_dict(bars, bars_chord_function, bars_pattern):
 
     return pattern_bars
 
-def generate_song(bar_patterns, markov_chains, chord_functions):
+def generate_song(bar_patterns, markov_chains, chord_functions, song_key):
     generated_bars = []
 
     for i in range(len(bar_patterns)):
@@ -470,7 +472,16 @@ def generate_song(bar_patterns, markov_chains, chord_functions):
         chain = markov_chains.get(bar_pattern)
 
         bar_notes = chain.sample_bar(chord_function)
-        generated_bars.append(bar_notes)
+
+        # Create bar notes with MIDI pitches
+        midi_notes = []
+        for note in bar_notes:
+            chord_tone, octave_offset, duration, beat_onset = note
+            note_midi_pitch = get_note_midi_pitch(chord_tone, chord_function, song_key, octave_offset)
+            midi_note = (note_midi_pitch, octave_offset, duration, beat_onset)
+            midi_notes.append(midi_note)
+
+        generated_bars.append(midi_notes)
 
     return generated_bars
 
@@ -489,7 +500,7 @@ print(f'pattern bars: {pattern_bars}')
 chains = build_chains(num_patterns, pattern_bars)
 print(f'chains: {chains}')
 
-song = generate_song([0,1], chains, ['I', 'ii'])
+song = generate_song([0,1], chains, ['I', 'ii'], 'C:maj')
 print(song)
 
 
