@@ -3,9 +3,9 @@ from hsmmlearn.hsmm import HSMMModel
 import numpy as np
 from collections import defaultdict
 from ChordFunctions import *
+from PatternMarkovChain import *
 
 class NoteEmission(AbstractEmissions):
-
     dtype = object
 
     def __init__(self, num_patterns, chord_functions):
@@ -372,7 +372,7 @@ def get_song_pattern_assignments(model, observations, bar_chord_functions):
     pattern_bars = defaultdict(lambda: defaultdict(list))
     model.emissions.set_context(bar_chord_functions, None)
 
-    state_sequence = model.decode(bar_observations)
+    state_sequence = model.decode(observations)
 
     for bar_index, pattern in enumerate(state_sequence):
         chord_function = bar_chord_functions[bar_index]
@@ -430,9 +430,9 @@ def get_note_midi_pitch(chord_tone, chord_roman_numeral, key, octave_offset=0):
 
     return note_midi_pitch
 
-song1_functions = [0, 0, 0, 0, 3, 3, 4, 4,4,4,4,4,4]
-gen_functions = [0, 0, 0, 0, 3, 3, 4, 4]
-chord_functions = [0,3,4]
+song_chord_functions = ['I', 'I', 'I', 'I', 'iii', 'iii', 'V', 'V', 'V', 'V', 'V', 'V', 'V']
+gen_functions = ['I', 'I', 'I', 'I', 'iii', 'iii', 'V', 'V']
+chord_functions = ['I','iii','V']
 obs_array = np.array(observations, dtype=object)
 
 num_patterns = 6
@@ -450,11 +450,46 @@ note_emission_hsmm = HSMMModel(
     durations, tmat
 )
 
-#note_emission.set_context(song1_functions, gen_functions)
-#result = note_emission_hsmm.fit(obs_array)
-##test_generate(note_emission_hsmm)
-#obs, states = test_generate(note_emission_hsmm)
-#decoded_states = note_emission_hsmm.decode(obs)
-#print(f'decoded states: {decoded_states}')
-midi_pitch = get_note_midi_pitch("root", 'I', 'F:major', 0)
-print(midi_pitch)
+def build_pattern_bars_dict(bars, bars_chord_function, bars_pattern):
+    pattern_bars = defaultdict(lambda: defaultdict(list))
+
+    for i in range(len(bars)):
+        print(f'current bar: {bars[i]}')
+        bar_pattern = bars_pattern[i]
+        bar_chord_function = bars_chord_function[i]
+        pattern_bars[bar_pattern][bar_chord_function].append(bars[i])
+
+    return pattern_bars
+
+def generate_song(bar_patterns, markov_chains, chord_functions):
+    generated_bars = []
+
+    for i in range(len(bar_patterns)):
+        bar_pattern = bar_patterns[i]
+        chord_function = chord_functions[i]
+        chain = markov_chains.get(bar_pattern)
+
+        bar_notes = chain.sample_bar(chord_function)
+        generated_bars.append(bar_notes)
+
+    return generated_bars
+
+dummy_decoded_states = [0,0,1,1,3,1,2,3,1,2,4,1,2]
+
+note_emission.set_context(song_chord_functions, gen_functions)
+result = note_emission_hsmm.fit(obs_array)
+obs, states = test_generate(note_emission_hsmm)
+decoded_states = note_emission_hsmm.decode(obs)
+print(f'decoded states: {decoded_states}')
+#midi_pitch = get_note_midi_pitch("root", 'I', 'F:major', 0)
+#print(midi_pitch)
+print(f'obs: {obs} chord_functions: {song_chord_functions} decoded states: {decoded_states}')
+pattern_bars = build_pattern_bars_dict(observations, song_chord_functions, dummy_decoded_states)
+print(f'pattern bars: {pattern_bars}')
+chains = build_chains(num_patterns, pattern_bars)
+print(f'chains: {chains}')
+
+song = generate_song([0,1], chains, ['I', 'ii'])
+print(song)
+
+
