@@ -116,7 +116,7 @@ def transpose_chord_to_c_major(chord, original_key):
         (chord_root_note, chord_type) = get_chord_root_and_type(chord)
         transposed_chord_root_note = transpose_note(chord_root_note, num_semitones_to_shift)
         transposed_chord = f'{transposed_chord_root_note}:{chord_type}'
-    except exception as e:
+    except Exception as e:
         raise ValueError(f"Error transposing: {e}")
 
     return transposed_chord
@@ -227,20 +227,25 @@ def convert_chord_name_to_roman_numeral(chord_name: str):
         >>> convert_chord_name_to_roman_numeral('X:maj')
         ValueError: Invalid chord name: X:maj
     """
-    chord_to_roman_numeral_mapping = {
-        'C:maj': 'I',
-        'D:min': 'ii',
-        'E:min': 'iii',
-        'F:maj': 'IV',
-        'G:maj': 'V',
-        'A:min': 'vi',
-        'B:dim': 'vii',
+
+    if chord_name == 'N':
+        return 'N'
+
+    root_note = chord_name.split(':')[0]
+    root_to_degree = {
+        'C': 'I',
+        'D': 'ii',
+        'E': 'iii',
+        'F': 'IV',
+        'G': 'V',
+        'A': 'vi',
+        'B': 'vii',
     }
 
-    if chord_name in chord_to_roman_numeral_mapping:
-        return chord_to_roman_numeral_mapping[chord_name]
-    else:
-        raise ValueError(f"Invlaid chord name: {chord_name}")
+    if root_note not in root_to_degree:
+        raise ValueError(f"Invalid root note: {root_note}")
+
+    return root_to_degree[root_note]
 
 def is_chord_tone(note_pitch, chord_name):
     """
@@ -286,4 +291,4 @@ def is_chord_tone(note_pitch, chord_name):
 
     pitch_class = note_pitch % 12
 
-    return pitch_class in CHORD_TEMPLATES[chord_name];
+    return pitch_class in CHORD_TEMPLATES[chord_name]

@@ -4,7 +4,7 @@ import os
 
 def load_songs(directory):
     songs_bars = []
-    songs_bars_chords = []
+    songs_bars_chords_roman = []
 
     for song_dir in sorted(os.listdir(directory)):
         song_path = os.path.join(directory, song_dir)
@@ -18,6 +18,7 @@ def load_songs(directory):
 
         if all(os.path.exists(file) for file in [midi_file, chord_file, key_file]):
             try:
+                song_key = load_key(key_file)[0]
                 notes = load_midi(midi_file)
                 bars = group_notes_by_bar(notes)
                 bar_timings = get_all_bar_timings(bars, 120)
@@ -25,14 +26,47 @@ def load_songs(directory):
                 bars_chords_mapped = assign_chords_to_bars(bar_timings, chord_timings)
 
                 for i in range(len(bars)):
-                    songs_bars.append(bars[i])
-                    songs_bars_chords.append(bars_chords_mapped)
+                    try:
+                        current_bar = bars[i]
+                        current_bar_chord = bars_chords_mapped[i]
+                        current_bar_formatted = []
+
+                        if current_bar_chord == 'N':
+                            songs_bars_chords_roman.append('N')
+                            songs_bars.append([])
+                            continue
+
+                        # Convert chord to its roman numeral form
+                        chord_in_c = transpose_chord_to_c_major(current_bar_chord, song_key)
+                        chord_roman = convert_chord_name_to_roman_numeral(chord_in_c)
+                        songs_bars_chords_roman.append(chord_roman)
+
+                        print(f'current chord: {current_bar_chord}, chord c major: {chord_in_c}, chord roman: {chord_roman}')
+
+                        # Format notes into the HSMM learning format: (chord_tone, octave_offset, note_duration, beat onset)
+                        for note in current_bar:
+                            note_midi_pitch = note['pitch']
+                            note_type = note['note_type']
+                            note_onset = note['beat_onset']
+                            
+                            note_chord_tone, octave_offset = get_note_chord_tone(note_midi_pitch, current_bar_chord)
+                            chord_in_c = transpose_chord_to_c_major(current_bar_chord, song_key)
+                            chord_roman = convert_chord_name_to_roman_numeral(chord_in_c)
+                            note_formatted = (note_chord_tone, octave_offset, note_type, note_onset)
+                            current_bar_formatted.append(note_formatted)
+
+                        songs_bars.append(current_bar_formatted)
+                    except Exception as e:
+                        songs_bars_chords_roman.append('I')
+                        current_bar_formatted.append(('root', 0, 'semibreve', 0.0))
+                        songs_bars.append(current_bar_formatted)
+                        continue
             except Exception as e:
                 print(f"Error loading song {song_dir}: {e}")
         else:
             print(f"Missing file for song {song_dir}")
 
-    return songs_bars, songs_bars_chords
+    return songs_bars, songs_bars_chords_roman
 
 def load_midi(midi_path):
     midi = MidiFile(midi_path)
@@ -186,16 +220,19 @@ def get_note_chord_tone(note_midi_pitch, chord):
         6: "b5", 7: "5th", 8: "6th", 9: "#6", 10: "7th", 11: "#7"
     }
 
-    (chord_root_note, chord_type) = get_chord_root_and_type(chord)
+    try:
+        (chord_root_note, chord_type) = get_chord_root_and_type(chord)
 
-    pitch_class_name_mapping = major_scale_intervals if chord_type == 'maj' else minor_scale_intervals
+        pitch_class_name_mapping = major_scale_intervals if chord_type == 'maj' else minor_scale_intervals
 
-    chord_root_midi_pitch = octave_4_note_midi_pitch_mapping[chord_root_note]
-    semitone_offset = note_midi_pitch - chord_root_midi_pitch
-    pitch_class_offset = semitone_offset % 12
-    octave_offset = semitone_offset // 12
+        chord_root_midi_pitch = octave_4_note_midi_pitch_mapping[chord_root_note]
+        semitone_offset = note_midi_pitch - chord_root_midi_pitch
+        pitch_class_offset = semitone_offset % 12
+        octave_offset = semitone_offset // 12
 
-    chord_tone = pitch_class_name_mapping[pitch_class_offset]
+        chord_tone = pitch_class_name_mapping[pitch_class_offset]
+    except Exception as e:
+        return ("root", 0)
 
     return (chord_tone, octave_offset)
 
@@ -321,6 +358,20 @@ def load_chord_timings(chord_file_path):
 
     return chord_timings
 
+def load_key(key_file_path):
+    keys = []
+
+    with open(key_file_path, 'r') as f:
+        for line in f:
+            line = line.strip()
+            parts = line.split('\t')
+
+            if len(parts) >= 3:
+                key = parts[2]
+                keys.append(key)
+
+    return keys
+
 def cap_notes_in_bar(bar_notes, beats_per_bar=4.0):
     for note in bar_notes:
         beats_remaining = beats_per_bar - note['beat_onset']
@@ -340,7 +391,7 @@ def cap_notes_in_bar(bar_notes, beats_per_bar=4.0):
 #bars_chords = assign_chords_to_bars(bar_timings, chord_timings)
 #print(f'original chords: {bars_chords}')
 
-directory = '/home/sachin/Documents/music_generator/test_data/'
+#directory = '/home/sachin/Documents/music_generator/test_data/'
+directory = '/cs/home/slzys1/Documents/music_generator/test_data'
 bars, bars_chords = load_songs(directory)
-print(f'bars: {bars}. chords: {bars_chords}')
-print(len(bars), len(bars_chords))
+print(bars, bars_chords)
