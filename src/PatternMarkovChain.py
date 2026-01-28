@@ -200,11 +200,3 @@ sample_bars = [[
         ('root', 0, 'quaver', 3.0),
         ('3rd', 0, 'quaver', 3.5)]
     ]
-
-pattern_bars = {0: {'I': sample_bars, 'II': sample_bars}}
-
-chains = PatternMarkovChain()
-chains = build_chains(1, pattern_bars)
-
-sample_bar = chains.get(0).sample_bar('I')
-print(sample_bar)

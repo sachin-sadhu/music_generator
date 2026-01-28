@@ -43,6 +43,7 @@ class NoteEmission(AbstractEmissions):
                 log_prob = 0.0
 
                 for note in bar_notes:
+                    print(f'chord function: {chord_function}')
                     note_prob = self.emission_probs[pattern_index][chord_function].get(note, 1e-10)
                     note_prob = np.clip(note_prob, 1e-10, 1.0)
                     log_prob += np.log(note_prob)
@@ -426,9 +427,7 @@ def get_note_midi_pitch(chord_tone, chord_roman_numeral, key, octave_offset=0):
     interval_mapping = major_scale_intervals_inverted if key_type.isupper() else minor_scale_intervals_inverted
 
     # Calculate final note pitch
-
-    print(f'chord tone: {chord_tone}')
-    note_midi_pitch = chord_root_note_midi_pitch + interval_mapping.get(chord_tone) + (octave_offset * 12)
+    note_midi_pitch = chord_root_note_midi_pitch + interval_mapping.get(chord_tone, 0) + (octave_offset * 12)
 
     return note_midi_pitch
 
@@ -485,22 +484,18 @@ def generate_song(bar_patterns, markov_chains, chord_functions, song_key):
 
     return generated_bars
 
-dummy_decoded_states = [0,0,1,1,3,1,2,3,1,2,4,1,2]
+if __name__ == "__main__":
+    note_emission.set_context(song_chord_functions, gen_functions)
+    result = note_emission_hsmm.fit(obs_array)
+    obs, states = test_generate(note_emission_hsmm)
+    decoded_states = note_emission_hsmm.decode(obs)
+    print(f'decoded states: {decoded_states}')
+    #midi_pitch = get_note_midi_pitch("root", 'I', 'F:major', 0)
+    #print(midi_pitch)
+    print(f'obs: {obs} chord_functions: {song_chord_functions} decoded states: {decoded_states}')
+    print(f'pattern bars: {pattern_bars}')
+    chains = build_chains(num_patterns, pattern_bars)
+    print(f'chains: {chains}')
 
-note_emission.set_context(song_chord_functions, gen_functions)
-result = note_emission_hsmm.fit(obs_array)
-obs, states = test_generate(note_emission_hsmm)
-decoded_states = note_emission_hsmm.decode(obs)
-print(f'decoded states: {decoded_states}')
-#midi_pitch = get_note_midi_pitch("root", 'I', 'F:major', 0)
-#print(midi_pitch)
-print(f'obs: {obs} chord_functions: {song_chord_functions} decoded states: {decoded_states}')
-pattern_bars = build_pattern_bars_dict(observations, song_chord_functions, dummy_decoded_states)
-print(f'pattern bars: {pattern_bars}')
-chains = build_chains(num_patterns, pattern_bars)
-print(f'chains: {chains}')
-
-song = generate_song([0,1], chains, ['I', 'ii'], 'C:maj')
-print(song)
-
-
+    song = generate_song([0,1], chains, ['I', 'ii'], 'C:maj')
+    print(song)

@@ -25,6 +25,9 @@ def load_songs(directory):
                 chord_timings = load_chord_timings(chord_file)
                 bars_chords_mapped = assign_chords_to_bars(bar_timings, chord_timings)
 
+                if get_chord_root_and_type(song_key)[1] == 'min':
+                    continue
+
                 for i in range(len(bars)):
                     try:
                         current_bar = bars[i]
@@ -40,8 +43,6 @@ def load_songs(directory):
                         chord_in_c = transpose_chord_to_c_major(current_bar_chord, song_key)
                         chord_roman = convert_chord_name_to_roman_numeral(chord_in_c)
                         songs_bars_chords_roman.append(chord_roman)
-
-                        print(f'current chord: {current_bar_chord}, chord c major: {chord_in_c}, chord roman: {chord_roman}')
 
                         # Format notes into the HSMM learning format: (chord_tone, octave_offset, note_duration, beat onset)
                         for note in current_bar:
@@ -379,6 +380,17 @@ def cap_notes_in_bar(bar_notes, beats_per_bar=4.0):
             note['beat_duration'] = beats_remaining
             note['note_type'] = quantise_beat_duration(beats_remaining)
 
+def filter_empty_bars_no_chord(bars, bars_chords):
+    filtered_bars = []
+    filtered_bars_chords = []
+
+    for i in range(min(len(bars), len(bars_chords))):
+        if bars[i] != [] and bars_chords[i] != 'N':
+            filtered_bars.append(bars[i])
+            filtered_bars_chords.append(bars_chords[i])
+
+    return filtered_bars, filtered_bars_chords
+
 # Need to assign each bar a chord function
 
 #midi_path = '/home/sachin/Documents/music_generator/POP909/POP909/001/001.mid'
@@ -394,4 +406,7 @@ def cap_notes_in_bar(bar_notes, beats_per_bar=4.0):
 #directory = '/home/sachin/Documents/music_generator/test_data/'
 directory = '/cs/home/slzys1/Documents/music_generator/test_data'
 bars, bars_chords = load_songs(directory)
-print(bars, bars_chords)
+filtered_bars, filtered_bars_chords = filter_empty_bars_no_chord(bars, bars_chords)
+print(len(bars), len(bars_chords))
+print(len(filtered_bars), len(filtered_bars_chords))
+print(filtered_bars, filtered_bars_chords)
