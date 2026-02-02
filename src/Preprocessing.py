@@ -80,7 +80,7 @@ def load_midi(midi_path):
     active_notes = {}
     current_tick = 0
 
-    for msg in midi.tracks[1]:
+    for msg in midi.tracks[3]:
         current_tick += msg.time
 
         # Note is being played

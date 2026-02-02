@@ -1,5 +1,60 @@
 import mido
 from mido import MidiFile, MidiTrack, Message
+from Preprocessing import *
+from ChordFunctions import *
+from ChordTraining import *
+from NoteEmission import initalise_tmat, get_note_midi_pitch
+import numpy as np
+
+def generate_song(num_bars):
+    directory = '/cs/home/slzys1/Documents/music_generator/test_data'
+    bars, bars_chords = load_songs(directory)
+    filtered_bars, filtered_bars_chords = filter_empty_bars_no_chord(bars, bars_chords)
+
+    num_patterns = 4
+    max_duration = 10
+    obs_array = np.array(filtered_bars, dtype=object)
+    durations = np.random.dirichlet(np.ones(max_duration), size=num_patterns)
+    tmat = initalise_tmat(num_patterns)
+
+    note_emission = NoteEmission(num_patterns, filtered_bars_chords)
+    note_emission_hsmm = HSMMModel(
+        note_emission, durations, tmat
+    )
+
+    note_emission.set_context(filtered_bars_chords, filtered_bars_chords)
+    result = note_emission_hsmm.fit(obs_array)
+    decoded_states = note_emission_hsmm.decode(filtered_bars)
+    key = 'C:maj'
+
+    pattern_bars = build_pattern_bars_dict(filtered_bars, filtered_bars_chords, decoded_states)
+    chains = build_chains(num_patterns, pattern_bars)
+
+    _, states = note_emission_hsmm.sample(num_bars)
+    chord_model = ChordTransitionModel()
+    chord_model.train(filtered_bars_chords)
+    
+    sampled_chord_sequence = chord_model.generate_chord_sequence(num_bars)
+    sampled_song = []
+    for i in range(num_bars):
+        bar_pattern = states[i]
+        bar_chord = sampled_chord_sequence[i]
+
+        print(f'bar pattern: {bar_pattern}. bar chord: {bar_chord}')
+        
+        chain = chains[bar_pattern]
+        sampled_bar = chain.sample_bar(bar_chord)
+
+        bar_midi_note = []
+        for note in sampled_bar:
+            chord_tone, _, note_duration, note_onset = note
+            note_midi_pitch = get_note_midi_pitch(chord_tone, bar_chord, key)
+            note_formatted = (note_midi_pitch, note_duration, note_onset)
+            bar_midi_note.append(note_formatted)
+
+        sampled_song.append(bar_midi_note)
+
+    return sampled_song
 
 def save_to_midi(bars, output_path='output.mid', tempo=500000, ticks_per_beat=480):
     duration_to_beats_map = {
@@ -65,3 +120,8 @@ def save_to_midi(bars, output_path='output.mid', tempo=500000, ticks_per_beat=48
         current_tick = event_tick
 
     mid.save(output_path)
+
+if __name__ == "__main__":
+    song = generate_song(20)
+    print(song)
+    save_to_midi(song)

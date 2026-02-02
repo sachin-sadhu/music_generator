@@ -219,128 +219,12 @@ class NoteEmission(AbstractEmissions):
     def copy(self):
         return NoteEmission(self.num_patterns, self.chord_functions.copy())
 
-observations = [
-    # Bars 0-3: Arpeggio pattern on tonic (I)
-    [
-        ('root', 0, 'quaver', 0.0),
-        ('3rd', 0, 'quaver', 0.5),
-        ('5th', 0, 'quaver', 1.0),
-        ('octave', 0, 'quaver', 1.5),
-        ('5th', 0, 'quaver', 2.0),
-        ('3rd', 0, 'quaver', 2.5),
-        ('root', 0, 'quaver', 3.0),
-        ('3rd', 0, 'quaver', 3.5),
-    ],
-    [
-        ('root', 0, 'quaver', 0.0),
-        ('3rd', 0, 'quaver', 0.5),
-        ('5th', 0, 'quaver', 1.0),
-        ('octave', 0, 'quaver', 1.5),
-        ('5th', 0, 'quaver', 2.0),
-        ('3rd', 0, 'quaver', 2.5),
-        ('root', 0, 'quaver', 3.0),
-        ('5th', 0, 'quaver', 3.5),
-    ],
-    [
-        ('root', 0, 'quaver', 0.0),
-        ('3rd', 0, 'quaver', 0.5),
-        ('5th', 0, 'quaver', 1.0),
-        ('octave', 0, 'quaver', 1.5),
-        ('5th', 0, 'quaver', 2.0),
-        ('3rd', 0, 'quaver', 2.5),
-        ('octave', 0, 'quaver', 3.0),
-        ('5th', 0, 'quaver', 3.5),
-    ],
-    [
-        ('root', 0, 'quaver', 0.0),
-        ('3rd', 0, 'quaver', 0.5),
-        ('5th', 0, 'quaver', 1.0),
-        ('octave', 0, 'quaver', 1.5),
-        ('5th', 0, 'quaver', 2.0),
-        ('3rd', 0, 'quaver', 2.5),
-        ('root', 0, 'quaver', 3.0),
-        ('3rd', 0, 'quaver', 3.5),
-    ],
-    [
-        ('root', 0, 'quaver', 0.0),
-        ('3rd', 0, 'quaver', 0.5),
-        ('5th', 0, 'quaver', 1.0),
-        ('octave', 0, 'quaver', 1.5),
-        ('5th', 0, 'quaver', 2.0),
-        ('3rd', 0, 'quaver', 2.5),
-        ('root', 0, 'quaver', 3.0),
-        ('3rd', 0, 'quaver', 3.5),
-    ],
-    [
-        ('root', 0, 'quaver', 0.0),
-        ('3rd', 0, 'quaver', 0.5),
-        ('5th', 0, 'quaver', 1.0),
-        ('octave', 0, 'quaver', 1.5),
-        ('5th', 0, 'quaver', 2.0),
-        ('3rd', 0, 'quaver', 2.5),
-        ('root', 0, 'quaver', 3.0),
-        ('3rd', 0, 'quaver', 3.5),
-    ],
-    [
-        ('root', 0, 'quaver', 0.0),
-        ('3rd', 0, 'quaver', 0.5),
-        ('5th', 0, 'quaver', 1.0),
-        ('octave', 0, 'quaver', 1.5),
-        ('5th', 0, 'quaver', 2.0),
-        ('3rd', 0, 'quaver', 2.5),
-        ('root', 0, 'quaver', 3.0),
-        ('3rd', 0, 'quaver', 3.5),
-    ],
-    [
-        ('root', 0, 'quaver', 0.0),
-        ('3rd', 0, 'quaver', 0.5),
-        ('5th', 0, 'quaver', 1.0),
-        ('octave', 0, 'quaver', 1.5),
-        ('5th', 0, 'quaver', 2.0),
-        ('3rd', 0, 'quaver', 2.5),
-        ('root', 0, 'quaver', 3.0),
-        ('3rd', 0, 'quaver', 3.5),
-    ],
-    [
-        ('root', 0, 'quaver', 0.0),
-        ('3rd', 0, 'quaver', 0.5),
-        ('5th', 0, 'quaver', 1.0),
-        ('octave', 0, 'quaver', 1.5),
-        ('5th', 0, 'quaver', 2.0),
-        ('3rd', 0, 'quaver', 2.5),
-        ('root', 0, 'quaver', 3.0),
-        ('3rd', 0, 'quaver', 3.5),
-    ],
-    # Bars 4-5: Block chord on subdominant (IV)
-    [
-        ('root', 0, 'semibreve', 0.0),
-        ('3rd', 0, 'semibreve', 0.0),
-        ('5th', 0, 'semibreve', 0.0),
-    ],
-    [
-        ('root', 0, 'semibreve', 0.0),
-        ('3rd', 0, 'semibreve', 0.0),
-        ('5th', 0, 'semibreve', 0.0),
-    ],
-    
-    # Bars 6-7: Block chord on dominant (V)
-    [
-        ('root', 0, 'minim', 0.0),
-        ('3rd', 0, 'minim', 0.0),
-        ('5th', 0, 'minim', 0.0),
-        ('root', 0, 'minim', 2.0),
-        ('3rd', 0, 'minim', 2.0),
-        ('5th', 0, 'minim', 2.0),
-    ],
-    [
-        ('root', 0, 'semibreve', 0.0),
-        ('3rd', 0, 'semibreve', 0.0),
-        ('5th', 0, 'semibreve', 0.0),
-    ],
-]
-
 def initalise_tmat(num_patterns):
     tmat = np.zeros((num_patterns, num_patterns))
+
+    if num_patterns == 1:
+        tmat[0,0] = 1.0
+        return tmat
 
     for i in range(num_patterns):
         prob_per_transition = 1.0 / (num_patterns - 1)
@@ -350,16 +234,6 @@ def initalise_tmat(num_patterns):
                 tmat[i,j] = prob_per_transition
 
     return tmat
-
-def test_generate(model):
-    print("\nTesting generation...")
-    model.emissions.current_bar_index = 0
-    obs, states = model.sample(8)
-    print("Generated observations:")
-    for i, obs in enumerate(obs):
-        print(f"Bar: {i}: {obs}")
-    print(f"Generated states: {states}")
-    return obs, states
 
 def get_song_pattern_assignments(model, observations, bar_chord_functions):
     """
@@ -431,26 +305,6 @@ def get_note_midi_pitch(chord_tone, chord_roman_numeral, key, octave_offset=0):
 
     return note_midi_pitch
 
-song_chord_functions = ['I', 'I', 'I', 'I', 'iii', 'iii', 'V', 'V', 'V', 'V', 'V', 'V', 'V']
-gen_functions = ['I', 'I', 'I', 'I', 'iii', 'iii', 'V', 'V']
-chord_functions = ['I','iii','V']
-obs_array = np.array(observations, dtype=object)
-
-num_patterns = 6
-max_duration = 5
-durations = np.random.dirichlet(np.ones(max_duration), size=num_patterns)
-tmat = initalise_tmat(num_patterns)
-
-print(f'Initial durations: {durations}')
-print(f'Initial tmat: {tmat}')
-
-note_emission = NoteEmission(num_patterns, chord_functions)
-
-note_emission_hsmm = HSMMModel(
-    note_emission,
-    durations, tmat
-)
-
 def build_pattern_bars_dict(bars, bars_chord_function, bars_pattern):
     pattern_bars = defaultdict(lambda: defaultdict(list))
 
@@ -461,41 +315,3 @@ def build_pattern_bars_dict(bars, bars_chord_function, bars_pattern):
         pattern_bars[bar_pattern][bar_chord_function].append(bars[i])
 
     return pattern_bars
-
-def generate_song(bar_patterns, markov_chains, chord_functions, song_key):
-    generated_bars = []
-
-    for i in range(len(bar_patterns)):
-        bar_pattern = bar_patterns[i]
-        chord_function = chord_functions[i]
-        chain = markov_chains.get(bar_pattern)
-
-        bar_notes = chain.sample_bar(chord_function)
-
-        # Create bar notes with MIDI pitches
-        midi_notes = []
-        for note in bar_notes:
-            chord_tone, octave_offset, duration, beat_onset = note
-            note_midi_pitch = get_note_midi_pitch(chord_tone, chord_function, song_key, octave_offset)
-            midi_note = (note_midi_pitch, octave_offset, duration, beat_onset)
-            midi_notes.append(midi_note)
-
-        generated_bars.append(midi_notes)
-
-    return generated_bars
-
-if __name__ == "__main__":
-    note_emission.set_context(song_chord_functions, gen_functions)
-    result = note_emission_hsmm.fit(obs_array)
-    obs, states = test_generate(note_emission_hsmm)
-    decoded_states = note_emission_hsmm.decode(obs)
-    print(f'decoded states: {decoded_states}')
-    #midi_pitch = get_note_midi_pitch("root", 'I', 'F:major', 0)
-    #print(midi_pitch)
-    print(f'obs: {obs} chord_functions: {song_chord_functions} decoded states: {decoded_states}')
-    print(f'pattern bars: {pattern_bars}')
-    chains = build_chains(num_patterns, pattern_bars)
-    print(f'chains: {chains}')
-
-    song = generate_song([0,1], chains, ['I', 'ii'], 'C:maj')
-    print(song)

@@ -5,11 +5,8 @@ from collections import defaultdict
 import pickle
 import numpy as np
 from Preprocessing import *
-from hsmmlearn.emissions import AbstractEmissions
-from hsmmlearn.hsmm import HSMMModel
 from PatternMarkovChain import *
 from NoteEmission import *
-from Main import *
 
 class ChordTransitionModel:
     
@@ -83,63 +80,3 @@ class ChordTransitionModel:
         if not self.is_trained:
             print("Warning. Model has not yet been trained.")
         return self.transition_probabilities
-
-if __name__ == "__main__":
-    directory = '/cs/home/slzys1/Documents/music_generator/test_data'
-    bars, bars_chords = load_songs(directory)
-    filtered_bars, filtered_bars_chords = filter_empty_bars_no_chord(bars, bars_chords)
-
-    model = ChordTransitionModel()
-    model.train(bars_chords)
-    generated_chords = model.generate_chord_sequence()
-
-    num_patterns = 6
-    max_duration = 10
-    obs_array = np.array(filtered_bars, dtype=object)
-    durations = np.random.dirichlet(np.ones(max_duration), size=num_patterns)
-    tmat = initalise_tmat(num_patterns)
-
-    note_emission = NoteEmission(num_patterns, filtered_bars_chords)
-    note_emission_hsmm = HSMMModel(
-        note_emission, durations, tmat
-    )
-
-    note_emission.set_context(filtered_bars_chords, filtered_bars_chords)
-    result = note_emission_hsmm.fit(obs_array)
-    decoded_states = note_emission_hsmm.decode(filtered_bars)
-    key = 'C:maj'
-
-    pattern_bars = build_pattern_bars_dict(filtered_bars, filtered_bars_chords, decoded_states)
-    print(pattern_bars)
-
-    chains = build_chains(num_patterns, pattern_bars)
-
-    number_of_bars = 10
-    _, states = note_emission_hsmm.sample(number_of_bars)
-    chord_model = ChordTransitionModel()
-    chord_model.train(filtered_bars_chords)
-    
-    sampled_chord_sequence = chord_model.generate_chord_sequence(number_of_bars)
-    sampled_song = []
-    for i in range(number_of_bars):
-        bar_pattern = states[i]
-        bar_chord = sampled_chord_sequence[i]
-
-        print(f'bar pattern: {bar_pattern}. bar chord: {bar_chord}')
-        
-        chain = chains[bar_pattern]
-        sampled_bar = chain.sample_bar(bar_chord)
-
-        bar_midi_note = []
-        for note in sampled_bar:
-            chord_tone, octave_offset, note_duration, note_onset = note
-            note_midi_pitch = get_note_midi_pitch(chord_tone, bar_chord, key)
-            note_formatted = (note_midi_pitch, note_duration, note_onset)
-            bar_midi_note.append(note_formatted)
-
-        sampled_song.append(bar_midi_note)
-
-    print(sampled_song)
-    save_to_midi(sampled_song)
-
-    

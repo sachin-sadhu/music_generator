@@ -177,7 +177,7 @@ def get_note_midi_pitch(chord_tone, chord_roman_numeral, key, octave_offset=0):
     interval_mapping = major_scale_intervals_inverted if key_type.isupper() else minor_scale_intervals_inverted
 
     # Calculate final note pitch
-    note_midi_pitch = chord_root_note_midi_pitch + interval_mapping.get(chord_tone) + (octave_offset * 12)
+    note_midi_pitch = chord_root_note_midi_pitch + interval_mapping.get(chord_tone, 0) + (octave_offset * 12)
 
     return note_midi_pitch
 
