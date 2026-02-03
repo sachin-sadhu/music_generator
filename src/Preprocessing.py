@@ -80,7 +80,7 @@ def load_midi(midi_path):
     active_notes = {}
     current_tick = 0
 
-    for msg in midi.tracks[3]:
+    for msg in midi.tracks[1]:
         current_tick += msg.time
 
         # Note is being played
@@ -391,6 +391,79 @@ def filter_empty_bars_no_chord(bars, bars_chords):
 
     return filtered_bars, filtered_bars_chords
 
+def create_chord_beat_onset_tupes_structure(bars, bars_chords):
+    length = min(len(bars), len(bars_chords))
+
+    chord_skeleton_notes_list = []
+    for i in range(length):
+        current_bar = bars[i]
+        current_chord = bars_chords[i]
+
+        strong_beat_notes = []
+        for note in current_bar:
+            if note[3] == 1.0 or note[3] == 3.0:
+                strong_beat_notes.append(note[0])
+
+        if len(strong_beat_notes) == 1:
+            chord_skeleton_notes = (current_chord, strong_beat_notes[0], strong_beat_notes[0])
+        elif len(strong_beat_notes) == 2:
+            chord_skeleton_notes = (current_chord, strong_beat_notes[0], strong_beat_notes[1])
+        else:
+            continue
+
+        chord_skeleton_notes_list.append(chord_skeleton_notes)
+
+    return chord_skeleton_notes_list
+
+def get_note_midi_pitch(chord_tone, chord_roman_numeral, key, octave_offset=0):
+    major_scale_intervals_inverted = {
+        "root": 0, "b2": 1, "2nd": 2, "b3": 3, "3rd": 4, "4th": 5,
+        "b5": 6, "5th": 7, "b6": 8, "6th": 9, "b7": 10, "7th": 11, "octave": 12
+    }
+
+    minor_scale_intervals_inverted = {
+        "root": 0, "b2": 1, "2nd": 2, "3rd": 3, "#3": 4, "4th": 5,
+        "b5": 6, "5th": 7, "6th": 8, "#6": 9, "7th": 10, "#7": 11, "octave": 12
+    }
+
+    roman_numeral_to_semitones = {
+        'I': 0,   # Tonic (0 semitones above root)
+        'ii': 2,  # 2 semitones above root
+        'iii': 4, # 4 semitones above root
+        'IV': 5,  # 5 semitones above root
+        'V': 7,   # 7 semitones above root ← We need this!
+        'vi': 9,  # 9 semitones above root
+        'vii': 11 # 11 semitones above root
+    }
+
+    note_to_pitch_class = {
+        'C': 0, 
+        'C#': 1, 'Db': 1,
+        'D': 2,
+        'D#': 3, 'Eb': 3,
+        'E': 4,
+        'F': 5,
+        'F#': 6, 'Gb': 6,
+        'G': 7,
+        'G#': 8, 'Ab': 8,
+        'A': 9,
+        'A#': 10, 'Bb': 10,
+        'B': 11
+    }
+
+    # Get key information
+    key_root_note, key_type = get_chord_root_and_type(key)
+    key_root_note_midi_pitch = 60 + note_to_pitch_class.get(key_root_note, 0)
+
+    # Calculate chord root
+    chord_root_note_midi_pitch = key_root_note_midi_pitch + roman_numeral_to_semitones.get(chord_roman_numeral, 0)
+    interval_mapping = major_scale_intervals_inverted if key_type.isupper() else minor_scale_intervals_inverted
+
+    # Calculate final note pitch
+    note_midi_pitch = chord_root_note_midi_pitch + interval_mapping.get(chord_tone, 0) + (octave_offset * 12)
+
+    return note_midi_pitch
+
 # Need to assign each bar a chord function
 
 #midi_path = '/home/sachin/Documents/music_generator/POP909/POP909/001/001.mid'
@@ -404,9 +477,41 @@ def filter_empty_bars_no_chord(bars, bars_chords):
 #print(f'original chords: {bars_chords}')
 
 #directory = '/home/sachin/Documents/music_generator/test_data/'
-directory = '/cs/home/slzys1/Documents/music_generator/test_data'
-bars, bars_chords = load_songs(directory)
-filtered_bars, filtered_bars_chords = filter_empty_bars_no_chord(bars, bars_chords)
-print(len(bars), len(bars_chords))
-print(len(filtered_bars), len(filtered_bars_chords))
-print(filtered_bars, filtered_bars_chords)
+
+if __name__ == "__main__":
+    directory = '/cs/home/slzys1/Documents/music_generator/short_test_data'
+    bars, bars_chords = load_songs(directory)
+    filtered_bars, filtered_bars_chords = filter_empty_bars_no_chord(bars, bars_chords)
+    beat_onset_tuple_list = create_chord_beat_onset_tupes_structure(filtered_bars, filtered_bars_chords)
+    print(beat_onset_tuple_list)
+
+    chord_model = ChordTransitionModel()
+    chord_model.train(filtered_bars_chords)
+    sampled_chord_sequence = chord_model.generate_chord_sequence(10)
+
+    hmm = HMM(beat_onset_tuple_list)
+    hmm.train_model()
+    _, emitted_bars = hmm.viterbi(sampled_chord_sequence)
+
+    converted_bars = []
+    for bar in emitted_bars:
+        bar_notes = []
+        bar_notes.append((bar[0], 0, 'crotchet', 1.0))
+        bar_notes.append((bar[1], 0, 'crotchet', 1.0))
+        converted_bars.append(bar_notes)
+
+    key = "C:maj"
+
+    bars_midi_pitch = []
+    for i, bar in enumerate(converted_bars):
+        bar_midi_notes = []
+        bar_chord = sampled_chord_sequence[i]
+        for note in bar:
+            chord_tone, _, note_duration, note_onset = note
+            note_midi_pitch = get_note_midi_pitch(chord_tone, bar_chord, key)
+            note_formatted = (note_midi_pitch, note_duration, note_onset)
+            bar_midi_notes.append(note_formatted)
+        bars_midi_pitch.append(bar_midi_notes)
+
+    print(bars_midi_pitch)
+

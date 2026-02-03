@@ -4,6 +4,7 @@ from Preprocessing import *
 from ChordFunctions import *
 from ChordTraining import *
 from NoteEmission import initalise_tmat, get_note_midi_pitch
+from HMM import HMM
 import numpy as np
 
 def generate_song(num_bars):
@@ -11,7 +12,7 @@ def generate_song(num_bars):
     bars, bars_chords = load_songs(directory)
     filtered_bars, filtered_bars_chords = filter_empty_bars_no_chord(bars, bars_chords)
 
-    num_patterns = 4
+    num_patterns = 2
     max_duration = 10
     obs_array = np.array(filtered_bars, dtype=object)
     durations = np.random.dirichlet(np.ones(max_duration), size=num_patterns)
@@ -122,6 +123,43 @@ def save_to_midi(bars, output_path='output.mid', tempo=500000, ticks_per_beat=48
     mid.save(output_path)
 
 if __name__ == "__main__":
-    song = generate_song(20)
-    print(song)
-    save_to_midi(song)
+    #song = generate_song(20)
+    #print(song)
+    #save_to_midi(song)
+    directory = '/cs/home/slzys1/Documents/music_generator/short_test_data'
+    bars, bars_chords = load_songs(directory)
+    filtered_bars, filtered_bars_chords = filter_empty_bars_no_chord(bars, bars_chords)
+    beat_onset_tuple_list = create_chord_beat_onset_tupes_structure(filtered_bars, filtered_bars_chords)
+    print(beat_onset_tuple_list)
+
+    chord_model = ChordTransitionModel()
+    chord_model.train(filtered_bars_chords)
+    sampled_chord_sequence = chord_model.generate_chord_sequence(10)
+    print(f'generated chords: {sampled_chord_sequence}')
+
+    hmm = HMM(beat_onset_tuple_list)
+    hmm.train_model()
+    _, emitted_bars = hmm.viterbi(sampled_chord_sequence)
+
+    converted_bars = []
+    for bar in emitted_bars:
+        bar_notes = []
+        bar_notes.append((bar[0], 0, 'crotchet', 1.0))
+        bar_notes.append((bar[1], 0, 'crotchet', 3.0))
+        converted_bars.append(bar_notes)
+
+    key = "C:maj"
+
+    bars_midi_pitch = []
+    for i, bar in enumerate(converted_bars):
+        bar_midi_notes = []
+        bar_chord = sampled_chord_sequence[i]
+        for note in bar:
+            chord_tone, _, note_duration, note_onset = note
+            note_midi_pitch = get_note_midi_pitch(chord_tone, bar_chord, key)
+            note_formatted = (note_midi_pitch, note_duration, note_onset)
+            bar_midi_notes.append(note_formatted)
+        bars_midi_pitch.append(bar_midi_notes)
+
+    print(bars_midi_pitch)
+    save_to_midi(bars_midi_pitch)
