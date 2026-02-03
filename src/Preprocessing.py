@@ -108,10 +108,13 @@ def load_midi(midi_path):
                 curr_note['beat_onset'] = quantised_beat_position
                 curr_note['bar_index'] = bar_index
                 curr_note['note_type'] = note_type
+                curr_note['clef'] = 'treble' if msg.note >= 60 else 'bass'
 
                 notes.append(curr_note)
                 del active_notes[msg.note]
 
+    notes = sorted(notes, key=lambda note: (note['bar_index', 'beat_onset']))
+    
     return notes
 
 def calculate_beat_position(ticks_per_bar, ticks_per_beat, tick_onset):
