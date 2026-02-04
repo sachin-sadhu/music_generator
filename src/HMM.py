@@ -1,4 +1,5 @@
 from collections import defaultdict
+import numpy as np
 
 class HMM:
     
@@ -26,17 +27,17 @@ class HMM:
 
         note_sequence = self.get_note_beat_sequence()
         for i in range(len(note_sequence)-1):
-            curr_note_beats = note_sequence[i]
-            next_note_beats = note_sequence[i+1]
+            curr_chord = note_sequence[i]
+            next_chord = note_sequence[i+1]
 
             # Increment counter
-            transition_count[curr_note_beats][next_note_beats] += 1
+            transition_count[curr_chord][next_chord] += 1
 
         transition_probs = defaultdict(lambda: defaultdict(float))
-        for curr_note_beats in transition_count.keys():
-            total_count = sum(transition_count[curr_note_beats].values())
-            for next_note_beats, count in transition_count[curr_note_beats].items():
-                transition_probs[curr_note_beats][next_note_beats] = count / total_count
+        for curr_chord in transition_count.keys():
+            total_count = sum(transition_count[curr_chord].values())
+            for next_chord, count in transition_count[curr_chord].items():
+                transition_probs[curr_chord][next_chord] = count / total_count
 
         return transition_probs
 
@@ -50,23 +51,64 @@ class HMM:
         for chord_note_struct in self.chord_beat_notes_list:
             chord, note_one, note_two = chord_note_struct
             note_pattern = (note_one, note_two)
-            emission_count[note_pattern][chord] += 1
+            emission_count[chord][note_pattern] += 1
 
         emission_probs = defaultdict(lambda: defaultdict(float))
-        for note_beats in emission_count.keys():
-            total_count = sum(emission_count[note_beats].values())
-            for chord, count in emission_count[note_beats].items():
-                emission_probs[note_beats][chord] = count / total_count
+        for chord in emission_count.keys():
+            total_count = sum(emission_count[chord].values())
+            for note_beats, count in emission_count[chord].items():
+                emission_probs[chord][note_beats] = count / total_count
 
         return emission_probs
 
     def get_note_beat_sequence(self):
-        return [(i[1], i[2]) for i in self.chord_beat_notes_list]
+        return [(i[0]) for i in self.chord_beat_notes_list]
+
+    def sample_emission(self, hidden_state):
+        if hidden_state not in self.emission_matrix:
+            raise ValueError("Invalid hidden state")
+
+        emission_notes = list(self.emission_matrix[hidden_state].keys())
+        emission_probs = list(self.emission_matrix[hidden_state].values())
+
+        return emission_notes[np.random.choice(len(emission_notes), p=emission_probs)]
+
+    def sample_next_hidden_state(self, current_hidden_state):
+        if current_hidden_state not in self.transition_matrix:
+            raise ValueError("Invalid hidden state")
+
+        next_hidden_states = list(self.transition_matrix[current_hidden_state].keys())
+        next_hidden_probs = list(self.transition_matrix[current_hidden_state].values())
+
+        return next_hidden_states[np.random.choice(len(next_hidden_states), p=next_hidden_probs)]
 
     def train_model(self):
         self.initial_probabilities = self.calc_initial_probabilities()
         self.transition_matrix = self.calc_hidden_state_transition_matrix()
         self.emission_matrix = self.calc_emission_state_transition_matrix()
+
+    def sample(self, num_samples=10):
+        sampled_hidden_states = []
+        sampled_emissions = []
+
+        # Sample initial hidden state
+        hidden_states = list(self.emission_matrix.keys())
+        hidden_states_probs = list(self.initial_probabilities[state] for state in hidden_states)
+        current_state = hidden_states[np.random.choice(len(hidden_states), p=hidden_states_probs)]
+        current_emission = self.sample_emission(current_state)
+
+        sampled_hidden_states.append(current_state)
+        sampled_emissions.append(current_emission)
+
+        while len(sampled_hidden_states) < num_samples:
+            # Sample next hidden state and emission.
+            current_state = self.sample_next_hidden_state(current_state)
+            current_emission = self.sample_emission(current_state)
+
+            sampled_hidden_states.append(current_state)
+            sampled_emissions.append(current_emission)
+
+        return sampled_hidden_states, sampled_emissions
 
     def get_hidden_states(self):
         return list(self.transition_matrix.keys())

@@ -64,6 +64,7 @@ def load_songs(directory):
                         continue
             except Exception as e:
                 print(f"Error loading song {song_dir}: {e}")
+                raise e
         else:
             print(f"Missing file for song {song_dir}")
 
@@ -113,7 +114,7 @@ def load_midi(midi_path):
                 notes.append(curr_note)
                 del active_notes[msg.note]
 
-    notes = sorted(notes, key=lambda note: (note['bar_index', 'beat_onset']))
+    notes = sorted(notes, key=lambda note: (note['bar_index'], note['beat_onset']))
     
     return notes
 
@@ -394,7 +395,7 @@ def filter_empty_bars_no_chord(bars, bars_chords):
 
     return filtered_bars, filtered_bars_chords
 
-def create_chord_beat_onset_tupes_structure(bars, bars_chords):
+def create_chord_beat_onset_tuple_structure(bars, bars_chords):
     length = min(len(bars), len(bars_chords))
 
     chord_skeleton_notes_list = []

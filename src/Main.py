@@ -129,29 +129,57 @@ if __name__ == "__main__":
     directory = '/cs/home/slzys1/Documents/music_generator/short_test_data'
     bars, bars_chords = load_songs(directory)
     filtered_bars, filtered_bars_chords = filter_empty_bars_no_chord(bars, bars_chords)
-    beat_onset_tuple_list = create_chord_beat_onset_tupes_structure(filtered_bars, filtered_bars_chords)
+    beat_onset_tuple_list = create_chord_beat_onset_tuple_structure(filtered_bars, filtered_bars_chords)
     print(beat_onset_tuple_list)
 
     chord_model = ChordTransitionModel()
     chord_model.train(filtered_bars_chords)
     sampled_chord_sequence = chord_model.generate_chord_sequence(10)
-    print(f'generated chords: {sampled_chord_sequence}')
+
+    num_patterns = 3
+    max_duration = 10
+    obs_array = np.array(filtered_bars, dtype=object)
+    durations = np.random.dirichlet(np.ones(max_duration), size=num_patterns)
+    tmat = initalise_tmat(num_patterns)
+
+    note_emission = NoteEmission(num_patterns, filtered_bars_chords)
+    note_emission_hsmm = HSMMModel(
+        note_emission, durations, tmat
+    )
+
+    note_emission.set_context(filtered_bars_chords, filtered_bars_chords)
+    result = note_emission_hsmm.fit(obs_array)
+    decoded_states = note_emission_hsmm.decode(filtered_bars)
+    key = 'C:maj'
+
+    pattern_bars = build_pattern_bars_dict(filtered_bars, filtered_bars_chords, decoded_states)
+    chains = build_chains(num_patterns, pattern_bars)
+
+    _, states = note_emission_hsmm.sample(10)
 
     hmm = HMM(beat_onset_tuple_list)
     hmm.train_model()
-    _, emitted_bars = hmm.viterbi(sampled_chord_sequence)
+    sampled_chords, sampled_skeleton_notes = hmm.sample(10)
 
-    converted_bars = []
-    for bar in emitted_bars:
-        bar_notes = []
-        bar_notes.append((bar[0], 0, 'crotchet', 1.0))
-        bar_notes.append((bar[1], 0, 'crotchet', 3.0))
-        converted_bars.append(bar_notes)
+    print(f'generated chords: {sampled_chords}')
+    print(f'skeleton notes: {sampled_skeleton_notes}')
+    # Want to use skeleton notes provided by emitted bars as the start in the markov chain
+    fully_sampled_bars = []
+    for i, bar_skeleton_note in enumerate(sampled_skeleton_notes):
+        skeleton_note_tone = bar_skeleton_note[0]
+        bar_markov_chain: PatternMarkovChain = chains[states[i]]
+        sampled_bar = bar_markov_chain.sample_bar(skeleton_note_tone, sampled_chords[i])
+        fully_sampled_bars.append(sampled_bar)
 
-    key = "C:maj"
+    #converted_bars = []
+    #for bar in emitted_bars:
+        #bar_notes = []
+        #bar_notes.append((bar[0], 0, 'crotchet', 1.0))
+        #bar_notes.append((bar[1], 0, 'crotchet', 3.0))
+        #converted_bars.append(bar_notes)
 
     bars_midi_pitch = []
-    for i, bar in enumerate(converted_bars):
+    for i, bar in enumerate(fully_sampled_bars):
         bar_midi_notes = []
         bar_chord = sampled_chord_sequence[i]
         for note in bar:

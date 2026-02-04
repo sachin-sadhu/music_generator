@@ -39,8 +39,6 @@ class PatternMarkovChain:
                 if len(bar) == 0:
                     continue
 
-                print(f'bar: {bar}')
-
                 sorted_notes = sorted(bar, key=lambda n: n[3])
 
                 start_note = sorted_notes[0]
@@ -53,19 +51,36 @@ class PatternMarkovChain:
 
                 self.total_bars += 1
 
-    def sample_bar(self, chord_function, num_beats=4.0):
+    def sample_bar(self, starting_note_tone, chord_function, num_beats=4.0):
         if chord_function not in self.start_count or len(self.start_count[chord_function]) == 0:
+            print(chord_function)
+            print(self.start_count[chord_function])
             return [('root', 0, 'semibreve', 0.0)]
 
         bar_notes = []
 
-        # Sample first note
-        start_notes = list(self.start_count[chord_function].keys())
-        start_counts = [self.start_count[chord_function][note] for note in start_notes]
-        start_probs = np.array(start_counts, dtype=float)
-        start_probs /= start_probs.sum()
+        possible_starting_notes = [note for note in list(self.start_count[chord_function].keys()) if note[3] == 0.0]
 
-        current_note = start_notes[np.random.choice(len(start_notes), p=start_probs)]
+        if len(possible_starting_notes) == 0:
+            print("no notes with beat onset 0.0")
+            return [('root', 0, 'semibreve', 0.0)]
+
+        starting_notes_with_required_tone = [note for note in possible_starting_notes if note[0] == starting_note_tone]
+
+        if len(starting_notes_with_required_tone) == 0:
+            print("no notes with beat onset 0.0")
+            # No notes with required tone, use any valid starting_note
+            start_counts = [self.start_count[chord_function][note] for note in possible_starting_notes]
+            start_probs = np.array(start_counts, dtype=float)
+            start_probs /= start_probs.sum()
+            current_note = possible_starting_notes[np.random.choice(len(possible_starting_notes), p=start_probs)]
+        else:
+            print("found possible notes with hat type")
+            start_counts = [self.start_count[chord_function][note] for note in starting_notes_with_required_tone]
+            start_probs = np.array(start_counts, dtype=float)
+            start_probs /= start_probs.sum()
+            current_note = starting_notes_with_required_tone[np.random.choice(len(starting_notes_with_required_tone), p=start_probs)]
+
         bar_notes.append(current_note)
 
         # Sample subsequent notes

@@ -309,7 +309,6 @@ def build_pattern_bars_dict(bars, bars_chord_function, bars_pattern):
     pattern_bars = defaultdict(lambda: defaultdict(list))
 
     for i in range(len(bars)):
-        print(f'current bar: {bars[i]}')
         bar_pattern = bars_pattern[i]
         bar_chord_function = bars_chord_function[i]
         pattern_bars[bar_pattern][bar_chord_function].append(bars[i])
