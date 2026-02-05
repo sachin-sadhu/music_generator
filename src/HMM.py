@@ -1,16 +1,52 @@
 from collections import defaultdict
 import numpy as np
+import pickle
+import os
 
 class HMM:
     
-    def __init__(self, chord_beat_notes_list):
-        self.chord_beat_notes_list = chord_beat_notes_list
+    def __init__(self):
         self.transition_matrix = None
         self.emission_matrix = None
         self.initial_probabilities = None
 
-    def calc_initial_probabilities(self):
-        note_sequence = self.get_note_beat_sequence()
+    def save_model(self, filepath="models/hmm.pkl"):
+
+        transition_probs = {}
+        emission_probs = {}
+
+        if self.transition_matrix:
+            transition_probs = {k: dict(v) for k, v in self.transition_matrix.items()}
+
+        if self.emission_matrix:
+            emission_probs = {k: dict(v) for k, v in self.emission_matrix.items()}
+
+        model_data = {
+            'transition_probs': transition_probs,
+            'emission_probs': emission_probs,
+            'initial_probs': self.initial_probabilities
+        }
+
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        with open(filepath, 'wb') as f:
+            pickle.dump(model_data, f)
+
+        print(f"Model saved to {filepath}.")
+
+    @classmethod
+    def load(cls, filepath='models/hmm.pkl'):
+        with open(filepath, 'rb') as f:
+            model_data = pickle.load(f)
+
+        model = cls()
+        model.transition_matrix = model_data['transition_probs']
+        model.emission_matrix = model_data['emission_probs']
+        model.initial_probabilities = model_data['initial_probs']
+
+        return model
+
+    def calc_initial_probabilities(self, chord_beat_notes_list):
+        note_sequence = self.get_note_beat_sequence(chord_beat_notes_list)
         unique_states = set(note_sequence)
 
         prob = 1.0 / len(unique_states)
@@ -19,13 +55,13 @@ class HMM:
         return initial_probs
 
     # Want a matrix from (first strong beat, second strong beat): {'I': 0.05}
-    def calc_hidden_state_transition_matrix(self):
+    def calc_hidden_state_transition_matrix(self, chord_beat_notes_list):
         """
             looks like 'I': {'II': 0.05, 'IV': 0.03}, 'II': {'I':0.01}
         """
         transition_count = defaultdict(lambda: defaultdict(int))
 
-        note_sequence = self.get_note_beat_sequence()
+        note_sequence = self.get_note_beat_sequence(chord_beat_notes_list)
         for i in range(len(note_sequence)-1):
             curr_chord = note_sequence[i]
             next_chord = note_sequence[i+1]
@@ -41,14 +77,13 @@ class HMM:
 
         return transition_probs
 
-    def calc_emission_state_transition_matrix(self):
+    def calc_emission_state_transition_matrix(self, chord_beat_notes_list):
         """
             want it to be like {'IV': {(2nd,3rd): 0.03}}
-
         """
         emission_count = defaultdict(lambda: defaultdict(int))
 
-        for chord_note_struct in self.chord_beat_notes_list:
+        for chord_note_struct in chord_beat_notes_list:
             chord, note_one, note_two = chord_note_struct
             note_pattern = (note_one, note_two)
             emission_count[chord][note_pattern] += 1
@@ -61,8 +96,8 @@ class HMM:
 
         return emission_probs
 
-    def get_note_beat_sequence(self):
-        return [(i[0]) for i in self.chord_beat_notes_list]
+    def get_note_beat_sequence(self, chord_beat_notes_list):
+        return [(i[0]) for i in chord_beat_notes_list]
 
     def sample_emission(self, hidden_state):
         if hidden_state not in self.emission_matrix:
@@ -82,10 +117,10 @@ class HMM:
 
         return next_hidden_states[np.random.choice(len(next_hidden_states), p=next_hidden_probs)]
 
-    def train_model(self):
-        self.initial_probabilities = self.calc_initial_probabilities()
-        self.transition_matrix = self.calc_hidden_state_transition_matrix()
-        self.emission_matrix = self.calc_emission_state_transition_matrix()
+    def train_model(self, chord_beat_notes_list):
+        self.initial_probabilities = self.calc_initial_probabilities(chord_beat_notes_list)
+        self.transition_matrix = self.calc_hidden_state_transition_matrix(chord_beat_notes_list)
+        self.emission_matrix = self.calc_emission_state_transition_matrix(chord_beat_notes_list)
 
     def sample(self, num_samples=10):
         sampled_hidden_states = []
@@ -150,19 +185,12 @@ class HMM:
    #}
 
 if __name__ == "__main__":
-    observations = ('I', 'IV', 'I')
-    start_probability = {('root', 'root'): 0.6, ('3rd', '3rd'): 0.4}
-    transition_probability = {
-    ('root', 'root') : {('root', 'root'): 0.7, ('3rd', '3rd'): 0.3},
-    ('3rd', '3rd') : {('root', 'root'): 0.4, ('3rd', '3rd'): 0.6},
-    }
-    emission_probability = {
-    ('root', 'root') : {'I': 0.1, 'II': 0.4, 'IV': 0.5},
-    ('3rd', '3rd') : {'I': 0.6, 'II': 0.3, 'IV': 0.1},
-    }
+    chord_beat_notes_list = [('IV', 'root', 'root'), ('I', '3rd', '3rd'), ('I', '2nd', '2nd')]
 
-    hmm = HMM(None)
-    hmm.transition_matrix = transition_probability
-    hmm.emission_matrix = emission_probability
-    hmm.initial_probabilities = start_probability
-    print(hmm.viterbi(observations))
+    hmm = HMM()
+    hmm.train_model(chord_beat_notes_list)
+    hmm.save_model()
+    hmm_loaded = HMM.load()
+    print(hmm_loaded.emission_matrix)
+    print(hmm_loaded.initial_probabilities)
+    print(hmm_loaded.transition_matrix)

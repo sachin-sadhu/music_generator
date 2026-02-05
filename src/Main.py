@@ -126,7 +126,7 @@ if __name__ == "__main__":
     #song = generate_song(20)
     #print(song)
     #save_to_midi(song)
-    directory = '/cs/home/slzys1/Documents/music_generator/short_test_data'
+    directory = '/home/sachin/Documents/music_generator/test_data'
     bars, bars_chords = load_songs(directory)
     filtered_bars, filtered_bars_chords = filter_empty_bars_no_chord(bars, bars_chords)
     beat_onset_tuple_list = create_chord_beat_onset_tuple_structure(filtered_bars, filtered_bars_chords)
@@ -157,8 +157,8 @@ if __name__ == "__main__":
 
     _, states = note_emission_hsmm.sample(10)
 
-    hmm = HMM(beat_onset_tuple_list)
-    hmm.train_model()
+    hmm = HMM()
+    hmm.train_model(beat_onset_tuple_list)
     sampled_chords, sampled_skeleton_notes = hmm.sample(10)
 
     print(f'generated chords: {sampled_chords}')
@@ -190,4 +190,4 @@ if __name__ == "__main__":
         bars_midi_pitch.append(bar_midi_notes)
 
     print(bars_midi_pitch)
-    save_to_midi(bars_midi_pitch)
+    save_to_midi(bars_midi_pitch, "yote.mid")
