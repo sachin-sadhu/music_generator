@@ -126,7 +126,7 @@ if __name__ == "__main__":
     #song = generate_song(20)
     #print(song)
     #save_to_midi(song)
-    directory = '/home/sachin/Documents/music_generator/test_data'
+    directory = '/cs/home/slzys1/Documents/music_generator/test_data'
     bars, bars_chords = load_songs(directory)
     filtered_bars, filtered_bars_chords = filter_empty_bars_no_chord(bars, bars_chords)
     beat_onset_tuple_list = create_chord_beat_onset_tuple_structure(filtered_bars, filtered_bars_chords)
@@ -155,11 +155,19 @@ if __name__ == "__main__":
     pattern_bars = build_pattern_bars_dict(filtered_bars, filtered_bars_chords, decoded_states)
     chains = build_chains(num_patterns, pattern_bars)
 
-    _, states = note_emission_hsmm.sample(10)
+    num_bars = 10
+
+    _, states = note_emission_hsmm.sample(num_bars)
 
     hmm = HMM()
     hmm.train_model(beat_onset_tuple_list)
-    sampled_chords, sampled_skeleton_notes = hmm.sample(10)
+    #sampled_chords, sampled_skeleton_notes = hmm.sample(10)
+
+    sampled_chords = ['I' for _ in range(num_bars)]
+    sampled_skeleton_notes = [('root', 'root') for _ in range(num_bars)]
+
+
+    sampled_skeleton_notes = [('root', 'root'), ('root', 'root'), ('root', 'root'), ('root', 'root'), ('root', 'root'), ('root', 'root'), ('root', 'root'), ('root', 'root'), ('root', 'root'), ('root', 'root')]
 
     print(f'generated chords: {sampled_chords}')
     print(f'skeleton notes: {sampled_skeleton_notes}')
@@ -181,7 +189,7 @@ if __name__ == "__main__":
     bars_midi_pitch = []
     for i, bar in enumerate(fully_sampled_bars):
         bar_midi_notes = []
-        bar_chord = sampled_chord_sequence[i]
+        bar_chord = sampled_chords[i]
         for note in bar:
             chord_tone, _, note_duration, note_onset = note
             note_midi_pitch = get_note_midi_pitch(chord_tone, bar_chord, key)
@@ -190,4 +198,4 @@ if __name__ == "__main__":
         bars_midi_pitch.append(bar_midi_notes)
 
     print(bars_midi_pitch)
-    save_to_midi(bars_midi_pitch, "yote.mid")
+    save_to_midi(bars_midi_pitch, "output.mid")

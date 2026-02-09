@@ -43,7 +43,6 @@ class NoteEmission(AbstractEmissions):
                 log_prob = 0.0
 
                 for note in bar_notes:
-                    print(f'chord function: {chord_function}')
                     note_prob = self.emission_probs[pattern_index][chord_function].get(note, 1e-10)
                     note_prob = np.clip(note_prob, 1e-10, 1.0)
                     log_prob += np.log(note_prob)
@@ -256,54 +255,54 @@ def get_song_pattern_assignments(model, observations, bar_chord_functions):
 
     return pattern_bars
 
-def get_note_midi_pitch(chord_tone, chord_roman_numeral, key, octave_offset=0):
-    major_scale_intervals_inverted = {
-        "root": 0, "b2": 1, "2nd": 2, "b3": 3, "3rd": 4, "4th": 5,
-        "b5": 6, "5th": 7, "b6": 8, "6th": 9, "b7": 10, "7th": 11, "octave": 12
-    }
+#def get_note_midi_pitch(chord_tone, chord_roman_numeral, key, octave_offset=0):
+    #major_scale_intervals_inverted = {
+        #"root": 0, "b2": 1, "2nd": 2, "b3": 3, "3rd": 4, "4th": 5,
+        #"b5": 6, "5th": 7, "b6": 8, "6th": 9, "b7": 10, "7th": 11, "octave": 12
+    #}
 
-    minor_scale_intervals_inverted = {
-        "root": 0, "b2": 1, "2nd": 2, "3rd": 3, "#3": 4, "4th": 5,
-        "b5": 6, "5th": 7, "6th": 8, "#6": 9, "7th": 10, "#7": 11, "octave": 12
-    }
+    #minor_scale_intervals_inverted = {
+        #"root": 0, "b2": 1, "2nd": 2, "3rd": 3, "#3": 4, "4th": 5,
+        #"b5": 6, "5th": 7, "6th": 8, "#6": 9, "7th": 10, "#7": 11, "octave": 12
+    #}
 
-    roman_numeral_to_semitones = {
-        'I': 0,   # Tonic (0 semitones above root)
-        'ii': 2,  # 2 semitones above root
-        'iii': 4, # 4 semitones above root
-        'IV': 5,  # 5 semitones above root
-        'V': 7,   # 7 semitones above root ← We need this!
-        'vi': 9,  # 9 semitones above root
-        'vii': 11 # 11 semitones above root
-    }
+    #roman_numeral_to_semitones = {
+        #'I': 0,   # Tonic (0 semitones above root)
+        #'ii': 2,  # 2 semitones above root
+        #'iii': 4, # 4 semitones above root
+        #'IV': 5,  # 5 semitones above root
+        #'V': 7,   # 7 semitones above root ← We need this!
+        #'vi': 9,  # 9 semitones above root
+        #'vii': 11 # 11 semitones above root
+    #}
 
-    note_to_pitch_class = {
-        'C': 0, 
-        'C#': 1, 'Db': 1,
-        'D': 2,
-        'D#': 3, 'Eb': 3,
-        'E': 4,
-        'F': 5,
-        'F#': 6, 'Gb': 6,
-        'G': 7,
-        'G#': 8, 'Ab': 8,
-        'A': 9,
-        'A#': 10, 'Bb': 10,
-        'B': 11
-    }
+    #note_to_pitch_class = {
+        #'C': 0, 
+        #'C#': 1, 'Db': 1,
+        #'D': 2,
+        #'D#': 3, 'Eb': 3,
+        #'E': 4,
+        #'F': 5,
+        #'F#': 6, 'Gb': 6,
+        #'G': 7,
+        #'G#': 8, 'Ab': 8,
+        #'A': 9,
+        #'A#': 10, 'Bb': 10,
+        #'B': 11
+    #}
 
-    # Get key information
-    key_root_note, key_type = get_chord_root_and_type(key)
-    key_root_note_midi_pitch = 60 + note_to_pitch_class.get(key_root_note, 0)
+    ## Get key information
+    #key_root_note, key_type = get_chord_root_and_type(key)
+    #key_root_note_midi_pitch = 60 + note_to_pitch_class.get(key_root_note, 0)
 
-    # Calculate chord root
-    chord_root_note_midi_pitch = key_root_note_midi_pitch + roman_numeral_to_semitones.get(chord_roman_numeral, 0)
-    interval_mapping = major_scale_intervals_inverted if key_type.isupper() else minor_scale_intervals_inverted
+    ## Calculate chord root
+    #chord_root_note_midi_pitch = key_root_note_midi_pitch + roman_numeral_to_semitones.get(chord_roman_numeral, 0)
+    #interval_mapping = major_scale_intervals_inverted if key_type.isupper() else minor_scale_intervals_inverted
 
-    # Calculate final note pitch
-    note_midi_pitch = chord_root_note_midi_pitch + interval_mapping.get(chord_tone, 0) + (octave_offset * 12)
+    ## Calculate final note pitch
+    #note_midi_pitch = chord_root_note_midi_pitch + interval_mapping.get(chord_tone, 0) + (octave_offset * 12)
 
-    return note_midi_pitch
+    #return note_midi_pitch
 
 def build_pattern_bars_dict(bars, bars_chord_function, bars_pattern):
     pattern_bars = defaultdict(lambda: defaultdict(list))

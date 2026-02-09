@@ -81,7 +81,7 @@ def load_midi(midi_path):
     active_notes = {}
     current_tick = 0
 
-    for msg in midi.tracks[1]:
+    for msg in midi.tracks[3]:
         current_tick += msg.time
 
         # Note is being played
@@ -465,6 +465,8 @@ def get_note_midi_pitch(chord_tone, chord_roman_numeral, key, octave_offset=0):
 
     # Calculate final note pitch
     note_midi_pitch = chord_root_note_midi_pitch + interval_mapping.get(chord_tone, 0) + (octave_offset * 12)
+
+    print(f"for chord type: {chord_roman_numeral}. for chord_tone: {chord_tone}. for key: {key}. generated_midi_pitch: {note_midi_pitch}")
 
     return note_midi_pitch
 
