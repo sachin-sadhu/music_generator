@@ -130,7 +130,11 @@ if __name__ == "__main__":
     bars, bars_chords = load_songs(directory)
     filtered_bars, filtered_bars_chords = filter_empty_bars_no_chord(bars, bars_chords)
     beat_onset_tuple_list = create_chord_beat_onset_tuple_structure(filtered_bars, filtered_bars_chords)
-    print(beat_onset_tuple_list)
+
+    #hmm = HMM()
+    #hmm.train_model(beat_onset_tuple_list)
+    #hmm.save_model()
+    hmm_loaded = HMM.load()
 
     chord_model = ChordTransitionModel()
     chord_model.train(filtered_bars_chords)
@@ -159,11 +163,9 @@ if __name__ == "__main__":
 
     _, states = note_emission_hsmm.sample(num_bars)
 
-    hmm = HMM()
-    hmm.train_model(beat_onset_tuple_list)
     #sampled_chords, sampled_skeleton_notes = hmm.sample(10)
 
-    sampled_chords = ['I' for _ in range(num_bars)]
+    sampled_chords = ['I', 'V', 'vi', 'IV', 'I', 'V', 'vi', 'IV', 'I', 'I']
     sampled_skeleton_notes = [('root', 'root') for _ in range(num_bars)]
 
 

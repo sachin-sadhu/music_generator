@@ -215,27 +215,29 @@ def get_note_chord_tone(note_midi_pitch, chord):
         'B': 71
     }
 
-    major_scale_intervals = {
-        0: "root", 1: "b2", 2: "2nd", 3: "b3", 4: "3rd", 5: "4th",
-        6: "b5", 7: "5th", 8: "b6", 9: "6th", 10: "b7", 11: "7th"
-    }
-
-    minor_scale_intervals = {
-        0: "root", 1: "b2", 2: "2nd", 3: "3rd", 4: "#3", 5: "4th",
-        6: "b5", 7: "5th", 8: "6th", 9: "#6", 10: "7th", 11: "#7"
+    chromatic_intervals = {
+        0: "root", 
+        1: "b2", 
+        2: "2nd", 
+        3: "b3",   # minor 3rd
+        4: "3rd",  # major 3rd
+        5: "4th",
+        6: "b5",   # tritone
+        7: "5th", 
+        8: "b6",   # minor 6th
+        9: "6th",  # major 6th
+        10: "b7",  # minor 7th
+        11: "7th"  # major 7th
     }
 
     try:
         (chord_root_note, chord_type) = get_chord_root_and_type(chord)
-
-        pitch_class_name_mapping = major_scale_intervals if chord_type == 'maj' else minor_scale_intervals
-
         chord_root_midi_pitch = octave_4_note_midi_pitch_mapping[chord_root_note]
         semitone_offset = note_midi_pitch - chord_root_midi_pitch
         pitch_class_offset = semitone_offset % 12
         octave_offset = semitone_offset // 12
 
-        chord_tone = pitch_class_name_mapping[pitch_class_offset]
+        chord_tone = chromatic_intervals[pitch_class_offset]
     except Exception as e:
         return ("root", 0)
 
@@ -403,31 +405,33 @@ def create_chord_beat_onset_tuple_structure(bars, bars_chords):
         current_bar = bars[i]
         current_chord = bars_chords[i]
 
-        strong_beat_notes = []
-        for note in current_bar:
-            if note[3] == 1.0 or note[3] == 3.0:
-                strong_beat_notes.append(note[0])
+        beat_notes = {0.0: None, 1.0: None, 2.0: None, 3.0: None}
 
-        if len(strong_beat_notes) == 1:
-            chord_skeleton_notes = (current_chord, strong_beat_notes[0], strong_beat_notes[0])
-        elif len(strong_beat_notes) == 2:
-            chord_skeleton_notes = (current_chord, strong_beat_notes[0], strong_beat_notes[1])
-        else:
-            continue
+        for note in current_bar:
+            beat_position = note[3]
+            if beat_position in beat_notes:
+                beat_notes[beat_position] = note[0]
+
+            # If bar is completely empty, skip
+            if all(v is None for v in beat_notes.values()):
+                continue
+
+            chord_skeleton_notes = (
+                current_chord,
+                beat_notes[0.0],
+                beat_notes[1.0],
+                beat_notes[2.0],
+                beat_notes[3.0]
+            )
 
         chord_skeleton_notes_list.append(chord_skeleton_notes)
 
     return chord_skeleton_notes_list
 
 def get_note_midi_pitch(chord_tone, chord_roman_numeral, key, octave_offset=0):
-    major_scale_intervals_inverted = {
+    chromatic_intervals_inverted = {
         "root": 0, "b2": 1, "2nd": 2, "b3": 3, "3rd": 4, "4th": 5,
         "b5": 6, "5th": 7, "b6": 8, "6th": 9, "b7": 10, "7th": 11, "octave": 12
-    }
-
-    minor_scale_intervals_inverted = {
-        "root": 0, "b2": 1, "2nd": 2, "3rd": 3, "#3": 4, "4th": 5,
-        "b5": 6, "5th": 7, "6th": 8, "#6": 9, "7th": 10, "#7": 11, "octave": 12
     }
 
     roman_numeral_to_semitones = {
@@ -461,63 +465,45 @@ def get_note_midi_pitch(chord_tone, chord_roman_numeral, key, octave_offset=0):
 
     # Calculate chord root
     chord_root_note_midi_pitch = key_root_note_midi_pitch + roman_numeral_to_semitones.get(chord_roman_numeral, 0)
-    interval_mapping = major_scale_intervals_inverted if key_type.isupper() else minor_scale_intervals_inverted
 
     # Calculate final note pitch
-    note_midi_pitch = chord_root_note_midi_pitch + interval_mapping.get(chord_tone, 0) + (octave_offset * 12)
+    note_midi_pitch = chord_root_note_midi_pitch + chromatic_intervals_inverted.get(chord_tone, 0) + (octave_offset * 12)
 
     print(f"for chord type: {chord_roman_numeral}. for chord_tone: {chord_tone}. for key: {key}. generated_midi_pitch: {note_midi_pitch}")
 
     return note_midi_pitch
 
-# Need to assign each bar a chord function
+def analyze_chromatic_frequency(skeleton_list):
+    """Check how often chromatic notes appear on each chord type."""
+    chromatic = {'b2', 'b5'}  # Most suspicious ones
+    
+    chord_chromatic_count = {}
+    chord_total_count = {}
+    
+    for item in skeleton_list:
+        chord = item[0]
+        notes = [n for n in item[1:] if n is not None]
+        
+        chord_total_count[chord] = chord_total_count.get(chord, 0) + len(notes)
+        
+        for note in notes:
+            if note in chromatic:
+                chord_chromatic_count[chord] = chord_chromatic_count.get(chord, 0) + 1
+    
+    print("Chromatic (b2, b5) frequency by chord:")
+    for chord in chord_total_count:
+        count = chord_chromatic_count.get(chord, 0)
+        total = chord_total_count[chord]
+        pct = (count / total) * 100 if total > 0 else 0
+        print(f"  {chord}: {count}/{total} ({pct:.1f}%)")
 
-#midi_path = '/home/sachin/Documents/music_generator/POP909/POP909/001/001.mid'
-#chord_path = '/home/sachin/Documents/music_generator/POP909/POP909/001/chord_midi.txt'
-#key_path = '/home/sachin/Documents/music_generator/POP909/POP909/001/key_audio.txt'
-#notes = load_midi(midi_path)
-#bars = group_notes_by_bar(notes)
-#bar_timings = get_all_bar_timings(bars, 120)
-#chord_timings = load_chord_timings(chord_path)
-#bars_chords = assign_chords_to_bars(bar_timings, chord_timings)
-#print(f'original chords: {bars_chords}')
-
-#directory = '/home/sachin/Documents/music_generator/test_data/'
+# Run it
 
 if __name__ == "__main__":
-    directory = '/cs/home/slzys1/Documents/music_generator/short_test_data'
+    directory = '/cs/home/slzys1/Documents/music_generator/test_data'
     bars, bars_chords = load_songs(directory)
     filtered_bars, filtered_bars_chords = filter_empty_bars_no_chord(bars, bars_chords)
-    beat_onset_tuple_list = create_chord_beat_onset_tupes_structure(filtered_bars, filtered_bars_chords)
-    print(beat_onset_tuple_list)
+    beat_onset_tuple_list = create_chord_beat_onset_tuple_structure(filtered_bars, filtered_bars_chords)
+    analyze_chromatic_frequency(beat_onset_tuple_list)
 
-    chord_model = ChordTransitionModel()
-    chord_model.train(filtered_bars_chords)
-    sampled_chord_sequence = chord_model.generate_chord_sequence(10)
-
-    hmm = HMM(beat_onset_tuple_list)
-    hmm.train_model()
-    _, emitted_bars = hmm.viterbi(sampled_chord_sequence)
-
-    converted_bars = []
-    for bar in emitted_bars:
-        bar_notes = []
-        bar_notes.append((bar[0], 0, 'crotchet', 1.0))
-        bar_notes.append((bar[1], 0, 'crotchet', 1.0))
-        converted_bars.append(bar_notes)
-
-    key = "C:maj"
-
-    bars_midi_pitch = []
-    for i, bar in enumerate(converted_bars):
-        bar_midi_notes = []
-        bar_chord = sampled_chord_sequence[i]
-        for note in bar:
-            chord_tone, _, note_duration, note_onset = note
-            note_midi_pitch = get_note_midi_pitch(chord_tone, bar_chord, key)
-            note_formatted = (note_midi_pitch, note_duration, note_onset)
-            bar_midi_notes.append(note_formatted)
-        bars_midi_pitch.append(bar_midi_notes)
-
-    print(bars_midi_pitch)
-
+    #print(beat_onset_tuple_list)
