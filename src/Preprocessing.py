@@ -23,10 +23,21 @@ def load_songs(directory):
                 bars = group_notes_by_bar(notes)
                 bar_timings = get_all_bar_timings(bars, 120)
                 chord_timings = load_chord_timings(chord_file)
-                bars_chords_mapped = assign_chords_to_bars(bar_timings, chord_timings)
+                #bars_chords_mapped = assign_chords_to_bars(bar_timings, chord_timings)
+                notes_chord_assigned = assign_chord_to_notes(notes, chord_timings)
 
                 if get_chord_root_and_type(song_key)[1] == 'min':
                     continue
+
+                for note in notes:
+                    note_cooresponding_chord = note_which_chord(note['start_seconds'], chord_timings)
+                    note_chord_tone = get_note_chord_tone(note['pitch'], note_cooresponding_chord)
+                    transposed_chord = (note_cooresponding_chord, song_key)
+                    chord_function = convert_chord_name_to_roman_numeral(transposed_chord)
+
+                    # Add new attributes to note dict
+                    note['chord_tone'] = note_chord_tone
+                    note['chord_function'] = chord_function
 
                 for i in range(len(bars)):
                     try:
@@ -70,12 +81,31 @@ def load_songs(directory):
 
     return songs_bars, songs_bars_chords_roman
 
-def load_midi(midi_path):
-    midi = MidiFile(midi_path)
+def get_tempo_from_midi(midi):
+    """
+    Extract tempo from MIDI file (microseconds per beat).
+    Default to 120 BPM if not found.
+    """
+    for track in midi.tracks:
+        for msg in track:
+            if msg.type == 'set_tempo':
+                return msg.tempo
+    return 500000  # Default: 120 BPM
 
+def ticks_to_seconds(ticks, ticks_per_beat, tempo_microseconds):
+    """
+        Convert MIDI ticks to seconds
+    """
+    seconds_per_beat = tempo_microseconds / 1000000
+    beats = ticks / ticks_per_beat
+    seconds = beats * seconds_per_beat
+    return seconds
+
+def load_midi(midi_path):
+
+    midi = MidiFile(midi_path)
     ticks_per_beat = midi.ticks_per_beat
-    beats_per_bar = 4
-    ticks_per_bar = ticks_per_beat * beats_per_bar
+    tempo = get_tempo_from_midi(midi)
 
     notes = []
     active_notes = {}
@@ -83,13 +113,14 @@ def load_midi(midi_path):
 
     for msg in midi.tracks[3]:
         current_tick += msg.time
+        current_seconds = ticks_to_seconds(current_tick, ticks_per_beat, tempo)
 
         # Note is being played
         if msg.type == 'note_on' and msg.velocity > 0:
             active_notes[msg.note] = {
                 'pitch': msg.note,
                 'start_tick': current_tick,
-                'velocity': msg.velocity
+                'start_seconds': current_seconds
             }
         
         # Note is being turned off
@@ -97,26 +128,74 @@ def load_midi(midi_path):
             if msg.note in active_notes:
                 curr_note = active_notes[msg.note]
 
-                tick_onset = curr_note['start_tick']
-                tick_duration = current_tick - tick_onset
-                beat_duration = tick_duration / ticks_per_beat
-                (bar_index, beat_position) = calculate_beat_position(ticks_per_bar, ticks_per_beat, tick_onset)
-                quantised_beat_position = quantise_beat_position(beat_position)
-                note_type = quantise_beat_duration(beat_duration)
+                #tick_onset = curr_note['start_tick']
+                #tick_duration = current_tick - tick_onset
+                #beat_duration = tick_duration / ticks_per_beat
+                #(bar_index, beat_position) = calculate_beat_position(ticks_per_bar, ticks_per_beat, tick_onset)
+                #quantised_beat_position = quantise_beat_position(beat_position)
+                #note_type = quantise_beat_duration(beat_duration)
 
-                curr_note['tick_duration'] = tick_duration
-                curr_note['beat_duration'] = beat_duration
-                curr_note['beat_onset'] = quantised_beat_position
-                curr_note['bar_index'] = bar_index
-                curr_note['note_type'] = note_type
+                #curr_note['tick_duration'] = tick_duration
+                #curr_note['beat_duration'] = beat_duration
+                #curr_note['beat_onset'] = quantised_beat_position
+                #curr_note['bar_index'] = bar_index
+                #curr_note['note_type'] = note_type
+                curr_note['end_seconds'] = current_seconds
                 curr_note['clef'] = 'treble' if msg.note >= 60 else 'bass'
 
                 notes.append(curr_note)
                 del active_notes[msg.note]
 
-    notes = sorted(notes, key=lambda note: (note['bar_index'], note['beat_onset']))
+    notes = sorted(notes, key=lambda note: note['start_seconds'])
     
     return notes
+
+def load_beat(beat_file_path):
+    print("hello")
+    beats = []
+
+    with open(beat_file_path, 'r') as f:
+        for line in f:
+            line = line.strip()
+            parts = line.split(' ')
+
+            if len(parts) >= 3:
+                beat_time = float(parts[0])
+                beat_strong_beat = float(parts[1])
+                beat_new_bar = float(parts[2])
+
+                beats.append((beat_time, beat_strong_beat, beat_new_bar))
+
+    return beats
+
+def split_beat_timings_to_bars(beat_timings):
+    bars = []
+    current_bar = []
+
+    for beat_time, beat_strong_beat, beat_new_bar in beat_timings:
+        # Reached the end of the bar
+        if len(current_bar) != 0 and beat_new_bar == 1.0:
+            bars.append(current_bar)
+            current_bar = [(beat_time, beat_strong_beat)]
+        else:
+            current_bar.append((beat_time, beat_strong_beat))
+
+    # Add last bar
+    if current_bar:
+        bars.append(current_bar)
+
+    return bars
+        
+
+"""
+    loop through file, when see a 1.0 in last column indicates new bar
+    continoulsy add until we see another 1.0
+"""
+
+def note_which_chord(note_onset, chord_timings):
+    for chord_start, chord_end, chord_label in chord_timings:
+        if chord_start <= note_onset <= chord_end:
+            return chord_label
 
 def calculate_beat_position(ticks_per_bar, ticks_per_beat, tick_onset):
     """
@@ -318,7 +397,6 @@ def assign_chords_to_bars(bar_timings, chord_timings):
     for bar_start, bar_end in bar_timings:
         current_max_overlap = 0
         current_best_chord = None
-
         for chord_start, chord_end, chord_label in chord_timings:
             overlap_start = max(bar_start, chord_start)
             overlap_end = min(bar_end, chord_end)
@@ -497,13 +575,12 @@ def analyze_chromatic_frequency(skeleton_list):
         pct = (count / total) * 100 if total > 0 else 0
         print(f"  {chord}: {count}/{total} ({pct:.1f}%)")
 
-# Run it
+
 
 if __name__ == "__main__":
-    directory = '/cs/home/slzys1/Documents/music_generator/test_data'
-    bars, bars_chords = load_songs(directory)
-    filtered_bars, filtered_bars_chords = filter_empty_bars_no_chord(bars, bars_chords)
-    beat_onset_tuple_list = create_chord_beat_onset_tuple_structure(filtered_bars, filtered_bars_chords)
-    analyze_chromatic_frequency(beat_onset_tuple_list)
-
-    #print(beat_onset_tuple_list)
+    directory = '/cs/home/slzys1/Documents/music_generator/short_test_data/001/001.mid'
+    chord_directory = '/cs/home/slzys1/Documents/music_generator/short_test_data/001/chord_midi.txt'
+    beat_directory = '/cs/home/slzys1/Documents/music_generator/short_test_data/001/beat_midi.txt'
+    beat_timings = load_beat(beat_directory)
+    bars = split_beat_timings_to_bars(beat_timings)
+    print(bars[0:5])
