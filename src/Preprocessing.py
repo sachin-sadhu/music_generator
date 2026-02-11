@@ -2,9 +2,11 @@ from mido import MidiFile
 from ChordFunctions import *
 import os
 
-def load_songs(directory):
+def load_song_info(directory):
     all_song_notes = {}
+    all_song_beat_chords = {}
 
+    # Loop through all songs
     for song_dir in sorted(os.listdir(directory)):
         song_path = os.path.join(directory, song_dir)
 
@@ -14,26 +16,44 @@ def load_songs(directory):
         midi_file = os.path.join(song_path, f"{song_dir}.mid")
         chord_file = os.path.join(song_path, "chord_midi.txt")
         key_file = os.path.join(song_path, "key_audio.txt")
+        beat_file = os.path.join(song_path, "beat_midi.txt")
 
-        # List of notes in this current song
-        if all(os.path.exists(file) for file in [midi_file, chord_file, key_file]):
+        if all(os.path.exists(file) for file in [midi_file, chord_file, key_file, beat_file]):
             try:
                 song_key = load_key(key_file)[0]
-                song_notes = load_midi(midi_file)
+                song_notes = load_midi_notes(midi_file)
                 chord_timings = load_chord_timings(chord_file)
+                beat_timings = load_beat_timings(beat_file)
+
                 #bars = group_notes_by_bar(notes)
                 #bar_timings = get_all_bar_timings(bars, 120)
                 #bars_chords_mapped = assign_chords_to_bars(bar_timings, chord_timings)
                 #notes_chord_assigned = assign_chord_to_notes(notes, chord_timings)
 
+                # Skip songs in minor keys for now
                 if get_chord_root_and_type(song_key)[1] == 'min':
                     continue
 
-                song_notes_filtered = []
+                # Process beat chords association
+                beats_chords = get_beats_chords(beat_timings, chord_timings)
+                beats_chords_function = []
+                for beat_chord in beats_chords:
+                    try:
+                        if beat_chord == 'N':
+                            beats_chords_function.append('N')
+                        else:
+                            transposed_chord = transpose_chord_to_c_major(beat_chord, song_key)
+                            chord_function = convert_chord_name_to_roman_numeral(transposed_chord)
+                            beats_chords_function.append(chord_function)
+                    except Exception as e:
+                        beats_chords_function.append('N')
+                all_song_beat_chords[song_dir] = beats_chords_function
 
+                # Process song notes
+                song_notes_filtered = []
                 for note in song_notes:
                     try:
-                        note_cooresponding_chord = note_which_chord(note['start_seconds'], chord_timings)
+                        note_cooresponding_chord = get_matching_chord(note['start_seconds'], chord_timings)
                         if note_cooresponding_chord == 'N':
                             continue
 
@@ -58,7 +78,7 @@ def load_songs(directory):
         else:
             print(f"Missing file for song {song_dir}")
 
-    return all_song_notes
+    return all_song_notes, all_song_beat_chords
 
 def get_tempo_from_midi(midi):
     """
@@ -80,7 +100,7 @@ def ticks_to_seconds(ticks, ticks_per_beat, tempo_microseconds):
     seconds = beats * seconds_per_beat
     return seconds
 
-def load_midi(midi_path):
+def load_midi_notes(midi_path):
 
     midi = MidiFile(midi_path)
     ticks_per_beat = midi.ticks_per_beat
@@ -130,10 +150,8 @@ def load_midi(midi_path):
     
     return treble_clef
 
-def load_beat(beat_file_path):
-    print("hello")
+def load_beat_timings(beat_file_path):
     beats = []
-
     with open(beat_file_path, 'r') as f:
         for line in f:
             line = line.strip()
@@ -147,6 +165,15 @@ def load_beat(beat_file_path):
                 beats.append((beat_time, beat_strong_beat, beat_new_bar))
 
     return beats
+
+def get_beats_chords(beat_timings, chord_timings):
+    beat_chords = []
+    for beat in beat_timings:
+        beat_onset = beat[0]
+        matched_chord = get_matching_chord(beat_onset, chord_timings)
+        beat_chords.append(matched_chord)
+
+    return beat_chords
 
 def split_beat_timings_to_bars(beat_timings):
     bars = []
@@ -172,9 +199,9 @@ def split_beat_timings_to_bars(beat_timings):
     continoulsy add until we see another 1.0
 """
 
-def note_which_chord(note_onset, chord_timings):
+def get_matching_chord(onset, chord_timings):
     for chord_start, chord_end, chord_label in chord_timings:
-        if chord_start <= note_onset <= chord_end:
+        if chord_start <= onset <= chord_end:
             return chord_label
 
 def calculate_beat_position(ticks_per_bar, ticks_per_beat, tick_onset):
@@ -563,6 +590,7 @@ def is_note_on_beat(note_onset_seconds, beat_timings, threshold=0.05):
     return False
 
 if __name__ == "__main__":
-    directory = '/cs/home/slzys1/Documents/music_generator/short_test_data/'
-    songs = load_songs(directory)
-    print(songs['001'][20])
+    directory = '/home/sachin/Documents/music_generator/short_test_data/'
+    notes, beat_chords = load_song_info(directory)
+    print(notes)
+    print(beat_chords)

@@ -53,7 +53,7 @@ class HMM:
 
         return model
 
-    def calc_hidden_state_duration_matrix(self, song_notes_dict):
+    def calc_hidden_state_duration_matrix(self, beat_chords_dict):
         """
         song_notes_dict is the dict of 001
         want it to look like 'I': {4: 0.05, 3: 0.95}
@@ -65,26 +65,40 @@ class HMM:
         increment counter. when we see next one is different, save current count to probablity. reset counter to 0
         """
 
-        # [I, I, I, iv, v]
-        for _, note_sequence in song_notes_dict.items():
+        # [I, I, I, iv, v, v, N]
+        for _, chord_sequence in beat_chords_dict.items():
             duration_counter = 0
-            for i in range(len(note_sequence)):
+            for i in range(len(chord_sequence)):
 
                 # Last chord in list
-                if i == len(note_sequence) - 1:
-                    # Last chord is not same as previous one
-                    if i > 0 and note_sequence[i]['chord_function'] != note_sequence[i-1]['chord_function']:
-                        duration_count[note_sequence[i]['chord_function']][1] += 1
-                    else:
+                if i == len(chord_sequence) - 1:
+                    # If last chord is not the same as previous one, then should increment count for '1' only if not 'N' chord
+                    if i > 0 and chord_sequence[i] != 'N' and chord_sequence[i] != chord_sequence[i-1]['chord_function']:
+                        duration_count[chord_sequence[i]][1] += 1
+                    # If last chord is same as previous one, then should increment duration counter only for if non 'N'
+                    elif i > 0 and chord_sequence[i] != 'N' and chord_sequence[i] == chord_sequence[i-1]:
                         duration_counter += 1
-                        duration_count[note_sequence[i]['chord_function']][duration_counter] += 1
+                        duration_count[chord_sequence[i]['chord_function']][duration_counter] += 1
+                    else:
+                        continue
                 else:
-                    curr_chord = note_sequence[i]['chord_function']
-                    next_chord = note_sequence[i+1]['chord_function']
+                    curr_chord = chord_sequence[i]
+                    next_chord = chord_sequence[i+1]
+
+                    if curr_chord == 'N':
+                        continue
+
+                    # End of current chords duration
+                    if next_chord == 'N':
+                        duration_counter += 1
+                        duration_count[curr_chord][duration_counter] += 1
+                        duration_counter = 0
+                        continue
 
                     if next_chord == curr_chord:
                         duration_counter += 1
                     else:
+                        # End of current chord's duration
                         duration_counter += 1
                         duration_count[curr_chord][duration_counter] += 1
                         duration_counter = 0
@@ -98,18 +112,18 @@ class HMM:
         return duration_probs
 
     # Want a matrix that contains chord function transition probabilities
-    def calc_hidden_state_transition_matrix(self, song_notes_dict):
+    def calc_hidden_state_transition_matrix(self, beat_chords_dict):
         """
             looks like 'I': {'II': 0.05, 'IV': 0.03}, 'II': {'I':0.01}
         """
         transition_count = defaultdict(lambda: defaultdict(int))
 
-        for _, note_sequence in song_notes_dict.items():
-            for i in range(len(note_sequence)-1):
-                curr_chord = note_sequence[i]['chord_function']
-                next_chord = note_sequence[i+1]['chord_function']
+        for _, chord_sequence in beat_chords_dict.items():
+            for i in range(len(chord_sequence)-1):
+                curr_chord = chord_sequence[i]
+                next_chord = chord_sequence[i+1]
 
-                if next_chord == curr_chord: 
+                if curr_chord == 'N' or next_chord == 'N' or next_chord == curr_chord: 
                     continue
 
                 transition_count[curr_chord][next_chord] += 1
