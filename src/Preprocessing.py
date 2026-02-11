@@ -3,8 +3,7 @@ from ChordFunctions import *
 import os
 
 def load_songs(directory):
-    songs_bars = []
-    songs_bars_chords_roman = []
+    all_song_notes = {}
 
     for song_dir in sorted(os.listdir(directory)):
         song_path = os.path.join(directory, song_dir)
@@ -16,70 +15,50 @@ def load_songs(directory):
         chord_file = os.path.join(song_path, "chord_midi.txt")
         key_file = os.path.join(song_path, "key_audio.txt")
 
+        # List of notes in this current song
         if all(os.path.exists(file) for file in [midi_file, chord_file, key_file]):
             try:
                 song_key = load_key(key_file)[0]
-                notes = load_midi(midi_file)
-                bars = group_notes_by_bar(notes)
-                bar_timings = get_all_bar_timings(bars, 120)
+                song_notes = load_midi(midi_file)
                 chord_timings = load_chord_timings(chord_file)
+                #bars = group_notes_by_bar(notes)
+                #bar_timings = get_all_bar_timings(bars, 120)
                 #bars_chords_mapped = assign_chords_to_bars(bar_timings, chord_timings)
-                notes_chord_assigned = assign_chord_to_notes(notes, chord_timings)
+                #notes_chord_assigned = assign_chord_to_notes(notes, chord_timings)
 
                 if get_chord_root_and_type(song_key)[1] == 'min':
                     continue
 
-                for note in notes:
-                    note_cooresponding_chord = note_which_chord(note['start_seconds'], chord_timings)
-                    note_chord_tone = get_note_chord_tone(note['pitch'], note_cooresponding_chord)
-                    transposed_chord = (note_cooresponding_chord, song_key)
-                    chord_function = convert_chord_name_to_roman_numeral(transposed_chord)
+                song_notes_filtered = []
 
-                    # Add new attributes to note dict
-                    note['chord_tone'] = note_chord_tone
-                    note['chord_function'] = chord_function
-
-                for i in range(len(bars)):
+                for note in song_notes:
                     try:
-                        current_bar = bars[i]
-                        current_bar_chord = bars_chords_mapped[i]
-                        current_bar_formatted = []
-
-                        if current_bar_chord == 'N':
-                            songs_bars_chords_roman.append('N')
-                            songs_bars.append([])
+                        note_cooresponding_chord = note_which_chord(note['start_seconds'], chord_timings)
+                        if note_cooresponding_chord == 'N':
                             continue
 
-                        # Convert chord to its roman numeral form
-                        chord_in_c = transpose_chord_to_c_major(current_bar_chord, song_key)
-                        chord_roman = convert_chord_name_to_roman_numeral(chord_in_c)
-                        songs_bars_chords_roman.append(chord_roman)
+                        note_chord_tone = get_note_chord_tone(note['pitch'], note_cooresponding_chord)
+                        transposed_chord = transpose_chord_to_c_major(note_cooresponding_chord, song_key)
+                        chord_function = convert_chord_name_to_roman_numeral(transposed_chord)
 
-                        # Format notes into the HSMM learning format: (chord_tone, octave_offset, note_duration, beat onset)
-                        for note in current_bar:
-                            note_midi_pitch = note['pitch']
-                            note_type = note['note_type']
-                            note_onset = note['beat_onset']
-                            
-                            note_chord_tone, octave_offset = get_note_chord_tone(note_midi_pitch, current_bar_chord)
-                            chord_in_c = transpose_chord_to_c_major(current_bar_chord, song_key)
-                            chord_roman = convert_chord_name_to_roman_numeral(chord_in_c)
-                            note_formatted = (note_chord_tone, octave_offset, note_type, note_onset)
-                            current_bar_formatted.append(note_formatted)
-
-                        songs_bars.append(current_bar_formatted)
+                        # Add new attributes to note dict
+                        note['original_chord'] = note_cooresponding_chord
+                        note['note_chord_tone'] = note_chord_tone
+                        note['chord_function'] = chord_function
+                        song_notes_filtered.append(note)
                     except Exception as e:
-                        songs_bars_chords_roman.append('I')
-                        current_bar_formatted.append(('root', 0, 'semibreve', 0.0))
-                        songs_bars.append(current_bar_formatted)
+                        #print(f"Error {song_dir} skipping note: {e}")
                         continue
+
+                all_song_notes[song_dir] = song_notes_filtered
+
             except Exception as e:
-                print(f"Error loading song {song_dir}: {e}")
-                raise e
+                print(f"Error{song_dir}: {e}")
+                continue
         else:
             print(f"Missing file for song {song_dir}")
 
-    return songs_bars, songs_bars_chords_roman
+    return all_song_notes
 
 def get_tempo_from_midi(midi):
     """
@@ -147,8 +126,9 @@ def load_midi(midi_path):
                 del active_notes[msg.note]
 
     notes = sorted(notes, key=lambda note: note['start_seconds'])
+    treble_clef = [note for note in notes if note['clef'] == 'treble']
     
-    return notes
+    return treble_clef
 
 def load_beat(beat_file_path):
     print("hello")
@@ -547,7 +527,7 @@ def get_note_midi_pitch(chord_tone, chord_roman_numeral, key, octave_offset=0):
     # Calculate final note pitch
     note_midi_pitch = chord_root_note_midi_pitch + chromatic_intervals_inverted.get(chord_tone, 0) + (octave_offset * 12)
 
-    print(f"for chord type: {chord_roman_numeral}. for chord_tone: {chord_tone}. for key: {key}. generated_midi_pitch: {note_midi_pitch}")
+    #print(f"for chord type: {chord_roman_numeral}. for chord_tone: {chord_tone}. for key: {key}. generated_midi_pitch: {note_midi_pitch}")
 
     return note_midi_pitch
 
@@ -575,12 +555,14 @@ def analyze_chromatic_frequency(skeleton_list):
         pct = (count / total) * 100 if total > 0 else 0
         print(f"  {chord}: {count}/{total} ({pct:.1f}%)")
 
-
+def is_note_on_beat(note_onset_seconds, beat_timings, threshold=0.05):
+    for beat_timing in beat_timings:
+        beat_onset_seconds = beat_timing[0]
+        if abs(beat_onset_seconds - note_onset_seconds) <= threshold:
+            return True
+    return False
 
 if __name__ == "__main__":
-    directory = '/cs/home/slzys1/Documents/music_generator/short_test_data/001/001.mid'
-    chord_directory = '/cs/home/slzys1/Documents/music_generator/short_test_data/001/chord_midi.txt'
-    beat_directory = '/cs/home/slzys1/Documents/music_generator/short_test_data/001/beat_midi.txt'
-    beat_timings = load_beat(beat_directory)
-    bars = split_beat_timings_to_bars(beat_timings)
-    print(bars[0:5])
+    directory = '/cs/home/slzys1/Documents/music_generator/short_test_data/'
+    songs = load_songs(directory)
+    print(songs['001'][20])

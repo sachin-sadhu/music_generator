@@ -1,7 +1,26 @@
 from mido import MidiFile
-from ChordFunctions import *
-from Preprocessing import *
-import os
+
+def load_beat(beat_file_path):
+    beats = []
+
+    with open(beat_file_path, 'r') as f:
+        for line in f:
+            line = line.strip()
+            parts = line.split('\t')
+
+            if len(parts) >= 3:
+                beat_time = parts[0]
+                beat_strong_beat = parts[1]
+                beat_new_bar = parts[2]
+
+                beats.append((beat_time, beat_strong_beat, beat_new_bar))
+
+    return beats
+
+def note_which_chord(note_onset, chord_timings):
+    for chord_start, chord_end, chord_label in chord_timings:
+        if chord_start <= note_onset <= chord_end:
+            return chord_label
 
 def load_midi(midi_path):
     midi = MidiFile(midi_path)
@@ -15,7 +34,6 @@ def load_midi(midi_path):
     current_tick = 0
 
     for msg in midi.tracks[3]:
-        print(msg)
         current_tick += msg.time
 
         # Note is being played
@@ -43,29 +61,15 @@ def load_midi(midi_path):
                 curr_note['beat_onset'] = quantised_beat_position
                 curr_note['bar_index'] = bar_index
                 curr_note['note_type'] = note_type
+                curr_note['clef'] = 'treble' if msg.note >= 60 else 'bass'
 
                 notes.append(curr_note)
                 del active_notes[msg.note]
 
-    sorted_notes = sorted(notes, key=lambda note: (note['bar_index'], note['beat_onset']))
-    return sorted_notes
-
-def split_by_clef(notes, split_pitch=60):
-    treble_clef = []
-    bass_clef = []
-
-    for note in notes:
-        if note['pitch'] >= split_pitch:
-            treble_clef.append(note)
-        else:
-            bass_clef.append(note)
-
-    return treble_clef, bass_clef
+    notes = sorted(notes, key=lambda note: (note['bar_index'], note['beat_onset']))
+    
+    return notes
 
 if __name__ == "__main__":
-    path = "/home/sachin/Documents/music_generator/POP909/POP909/001/001.mid"
-    notes = load_midi(path)
-    treble_clef, bass_clef = split_by_clef(notes)
-    print(f'treble clef: {treble_clef[0:3]}')
-    print('\n')
-    print(f'bass clef: {bass_clef[0:3]}')
+    chord_timings = [(0,2,'F:maj'), ((2,4,'C:maj'))]
+    print(note_which_chord(5.5, chord_timings))
