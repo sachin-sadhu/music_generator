@@ -4,9 +4,13 @@ import pickle
 import os
 
 class HMM:
-    
+    """
+        takes in a list of notes, filter such that we only have notes that occur on beats
+
+    """
     def __init__(self):
         self.transition_matrix = None
+        self.duration_matrix = None
         self.emission_matrix = None
         self.initial_probabilities = None
 
@@ -54,19 +58,62 @@ class HMM:
 
         return initial_probs
 
-    # Want a matrix from (first strong beat, second strong beat): {'I': 0.05}
-    def calc_hidden_state_transition_matrix(self, chord_beat_notes_list):
+    def calc_hidden_state_duration_matrix(self, note_sequence):
+        """
+        want it to look like 'I': {4: 0.05, 3: 0.95}
+        """
+        duration_count = defaultdict(lambda: defaultdict(int))
+
+        """
+        loop through items, while the next one is same as previous one
+        increment counter. when we see next one is different, save current count to probablity. reset counter to 0
+        """
+
+        # [I, I, I, iv, v]
+        duration_counter = 0
+        for i in range(len(note_sequence)):
+
+            # Last chord in list
+            if i == len(note_sequence) - 1:
+                # Last chord is not same as previous one
+                if i > 0 and note_sequence[i]['chord'] != note_sequence[i-1]['chord']:
+                    duration_count[note_sequence[i]['chord']][1] += 1
+                else:
+                    duration_counter += 1
+                    duration_count[note_sequence[i]['chord']][duration_counter] += 1
+            else:
+                curr_chord = note_sequence[i]['chord']
+                next_chord = note_sequence[i+1]['chord']
+
+                if next_chord == curr_chord:
+                    duration_counter += 1
+                else:
+                    duration_counter += 1
+                    duration_count[curr_chord][duration_counter] += 1
+                    duration_counter = 0
+        
+        duration_probs = defaultdict(lambda: defaultdict(float))
+        for chord_function in duration_count.keys():
+            total_count = sum(duration_count[chord_function].values())
+            for beat_duration, count in duration_count[chord_function].items():
+                duration_probs[chord_function][beat_duration] = count / total_count
+
+        return duration_probs
+
+    # Want a matrix that contains chord function transition probabilities
+    def calc_hidden_state_transition_matrix(self, note_sequence):
         """
             looks like 'I': {'II': 0.05, 'IV': 0.03}, 'II': {'I':0.01}
         """
         transition_count = defaultdict(lambda: defaultdict(int))
 
-        note_sequence = self.get_note_beat_sequence(chord_beat_notes_list)
         for i in range(len(note_sequence)-1):
-            curr_chord = note_sequence[i]
-            next_chord = note_sequence[i+1]
+            curr_chord = note_sequence[i]['chord']
+            next_chord = note_sequence[i+1]['chord']
 
-            # Increment counter
+            if (next_chord == curr_chord): 
+                continue
+
             transition_count[curr_chord][next_chord] += 1
 
         transition_probs = defaultdict(lambda: defaultdict(float))
@@ -77,22 +124,23 @@ class HMM:
 
         return transition_probs
 
-    def calc_emission_state_transition_matrix(self, chord_beat_notes_list):
+    def calc_emission_state_transition_matrix(self, note_sequence):
         """
-            want it to be like {'IV': {(2nd,3rd): 0.03}}
+            want it to be like {'IV': {root: 0.03}}
         """
         emission_count = defaultdict(lambda: defaultdict(int))
 
-        for chord_note_struct in chord_beat_notes_list:
-            chord, note_one, note_two = chord_note_struct
-            note_pattern = (note_one, note_two)
-            emission_count[chord][note_pattern] += 1
+        for i in range(len(note_sequence)-1):
+            curr_chord = note_sequence[i]['chord']
+            note_chord_tone = note_sequence[i]['chord_tone']
+
+            emission_count[curr_chord][note_chord_tone] += 1
 
         emission_probs = defaultdict(lambda: defaultdict(float))
-        for chord in emission_count.keys():
-            total_count = sum(emission_count[chord].values())
-            for note_beats, count in emission_count[chord].items():
-                emission_probs[chord][note_beats] = count / total_count
+        for chord_function in emission_count.keys():
+            total_count = sum(emission_count[chord_function].values())
+            for note_chord_tone, count in emission_count[chord_function].items():
+                emission_probs[chord_function][note_chord_tone] = count / total_count
 
         return emission_probs
 
