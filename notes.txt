@@ -155,3 +155,50 @@ transition matrix is chord independant, so will need to convert the chord in tha
 key to the chord in C major. what chord model is trained on
 then once new roman numeral chord is sampled (I - IV), will need to convert that back 
 into chord in original key
+
+loop through all notes that occur on whole beats, for each note check what chord it is.
+track how long consecutive chord functions last, for distribution when sampling a chord, see how many beats it lasts
+
+whenever a chord changes, use that change for transition matrix emission, for each chord, also want to sample what note it emits at each beat
+
+basically, want to go through beats file, for every beat, check what chord it is
+
+for this second layer, want sort sort of HMM that generates a short 
+sequence of oranmation notes between them. 
+
+in order to train, for each pair of skeelton notes, we want to gather all the notes that appear in between them  
+
+each ornamental note is emitted by exactly 1 hidden state
+
+hidden: passing tone -> chord tone
+emitted:      D4              F4
+
+have a speerate HMM for each (interval, chord_function)
+
+makes sense because dfiferent intervals probably have different preferd patterns
+such as chromatic appraoch/passing tone
+
+different roles:
+  chromatic appraoch: half step above/below next note and next note is chord tone
+  passing_tone: note stepwise between previous and next notes. all moving in same direction. example: c -> d -> e
+  chord tone: chord tone of current key
+  neighbour_tone: note steps away from previous note, next note steps back to where we originally were
+  other: doesnt fit into anything
+
+what do i need to do? 
+
+identify skeleton notes (notes that fall on beats) and their interval, for each pair of skeleton notes (identify and group all the notes in between them in some sequential order)
+
+for each ornament note, identify the kind of role its serving
+
+for training, given a interval between skeleton notes and the chord function, do frequency counting for that particular role as hidden state
+
+for example, given skeelton notes with interval 5, 'I'. lets say theres 2 neighbour tones
+
+then i want do frequency counting for the hidden state, increment counter by 1 for neighbour tone -> neighbour tone
+also increement counter for emission matrix, where we want to use scale degree relative to the key
+
+
+
+
+ 

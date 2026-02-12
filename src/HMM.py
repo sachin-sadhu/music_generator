@@ -73,12 +73,12 @@ class HMM:
                 # Last chord in list
                 if i == len(chord_sequence) - 1:
                     # If last chord is not the same as previous one, then should increment count for '1' only if not 'N' chord
-                    if i > 0 and chord_sequence[i] != 'N' and chord_sequence[i] != chord_sequence[i-1]['chord_function']:
+                    if i > 0 and chord_sequence[i] != 'N' and chord_sequence[i] != chord_sequence[i-1]:
                         duration_count[chord_sequence[i]][1] += 1
                     # If last chord is same as previous one, then should increment duration counter only for if non 'N'
                     elif i > 0 and chord_sequence[i] != 'N' and chord_sequence[i] == chord_sequence[i-1]:
                         duration_counter += 1
-                        duration_count[chord_sequence[i]['chord_function']][duration_counter] += 1
+                        duration_count[chord_sequence[i]][duration_counter] += 1
                     else:
                         continue
                 else:
@@ -187,10 +187,10 @@ class HMM:
 
         return next_hidden_states[np.random.choice(len(next_hidden_states), p=next_hidden_probs)]
 
-    def train_model(self, song_notes_dict):
-        self.transition_matrix = self.calc_hidden_state_transition_matrix(song_notes_dict)
+    def train_model(self, song_notes_dict, beat_chords_dict):
+        self.transition_matrix = self.calc_hidden_state_transition_matrix(beat_chords_dict)
+        self.duration_matrix = self.calc_hidden_state_duration_matrix(beat_chords_dict)
         self.emission_matrix = self.calc_emission_state_transition_matrix(song_notes_dict)
-        self.duration_matrix = self.calc_hidden_state_duration_matrix(song_notes_dict)
 
     def sample(self, num_samples=10):
         def sample_beats(hidden_state, num_beats):

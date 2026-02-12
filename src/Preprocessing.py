@@ -1,4 +1,4 @@
-from mido import MidiFile
+from mido import MidiFile, tick2second
 from ChordFunctions import *
 import os
 
@@ -112,7 +112,8 @@ def load_midi_notes(midi_path):
 
     for msg in midi.tracks[3]:
         current_tick += msg.time
-        current_seconds = ticks_to_seconds(current_tick, ticks_per_beat, tempo)
+        #current_seconds = ticks_to_seconds(current_tick, ticks_per_beat, tempo)
+        current_seconds = tick2second(current_tick, ticks_per_beat, tempo)
 
         # Note is being played
         if msg.type == 'note_on' and msg.velocity > 0:
@@ -588,6 +589,80 @@ def is_note_on_beat(note_onset_seconds, beat_timings, threshold=0.05):
         if abs(beat_onset_seconds - note_onset_seconds) <= threshold:
             return True
     return False
+
+def get_note_at_beat_timing(beat_timing, notes, threshold=0.05):
+    notes = sorted(notes, key=lambda i: i['start_seconds'])
+    for note in notes:
+        if abs(beat_timing - note['start_seconds']) <= threshold:
+            return note
+        
+        if note['start_seconds'] - 1.0 >= beat_timing:
+            return None
+
+    return None
+
+def get_ornaments(s1_onset, s2_onset, notes):
+    """
+        Given 2 skeleton notes, gets all the notes in between them
+    """
+    # Given the onset in seconds of 2 notes, want to find all the notes that fall in between them  
+    notes = sorted(notes, key=lambda i: i['start_seconds'])
+    inbetween_notes = [note for note in notes if s1_onset < note['start_seconds'] < s2_onset]
+    return inbetween_notes
+
+def get_skeleton_note_pairs(notes, beat_timings):
+    """
+        Given the list of notes and beat timings, gets all beat note timings
+    """
+    pairs = []
+    beat_timings.sort(key=lambda beat: beat[0])
+    
+    for i in range(len(beat_timings)-1):
+        curr_beat_timing = beat_timings[i][0]
+        next_beat_timing = beat_timings[i+1][0]
+
+        curr_beat_note = get_note_at_beat_timing(curr_beat_timing, notes)
+        next_beat_note = get_note_at_beat_timing(next_beat_timing, notes)
+
+        if curr_beat_note is None or next_beat_note is None:
+            continue
+
+        pair = (curr_beat_note, next_beat_note)
+        pairs.append((pair))
+
+    return pairs
+
+def get_skeleton_note_ornament_grouping(notes, beat_timings):
+    """
+        given the list of notes, groups them into skeleton notes and ornaments between those skeletons
+    """
+    # have in format [[s1,s2, [ornament notes]], [s1,s2, [ornament notes]]]
+    groupings = []
+    skeleton_note_pairs = get_skeleton_note_pairs(notes, beat_timings)
+
+    for s1, s2 in skeleton_note_pairs:
+        ornaments = get_ornaments(s1['start_seconds'], s2['start_seconds'], notes)
+        grouping = [s1,s2,ornaments]
+        groupings.append(grouping)
+
+    return groupings
+
+def ornament_note_role(prev_note, target_note, next_note, chord_tones):
+    step_from_prev = abs(target_note - prev_note)
+    step_to_next = abs(target_note - next_note)
+    same_direction = (prev_note < target_note < next_note) or (prev_note > target_note > next_note)
+
+
+    if step_to_next == 1 and next_note in chord_tones and target_note not in chord_tones:
+        return "chromatic_approach"
+    elif same_direction and step_from_prev <= 2:
+        return "passing_tone"
+    elif step_from_prev <= 2 and step_to_next <= 2 and not same_direction:
+        return "neighbour_tone"
+    elif target_note in chord_tones:
+        return "chord_tone"
+    else:
+        return "other"
 
 if __name__ == "__main__":
     directory = '/home/sachin/Documents/music_generator/short_test_data/'

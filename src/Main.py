@@ -132,10 +132,32 @@ def save_to_midi(notes, output_path='output.mid', tempo=500000, ticks_per_beat=4
     mid.save(output_path)
 
 if __name__ == "__main__":
-    directory = '/cs/home/slzys1/Documents/music_generator/short_test_data/'
-    songs = load_songs(directory)
-    hmm = HMM()
-    hmm.train_model(songs)
+    notes_file = '/home/sachin/Documents/music_generator/short_test_data/003/003.mid'
+    beat_file = '/home/sachin/Documents/music_generator/short_test_data/003/beat_midi.txt'
+    beat_timing = load_beat_timings(beat_file)
+    notes = load_midi_notes(notes_file)
+    grouping = get_skeleton_note_ornament_grouping(notes, beat_timing)
+    print(grouping)
+    #hmm = HMM()
+    #hmm.train_model(notes, beat_chords)
+    #print(hmm.duration_matrix)
+    #print(hmm.transition_matrix)
+
+    #sampled_beats = hmm.sample(5)
+    #notes = [(beat[0], beat[1], 'crotchet', 0.0) for beat in sampled_beats]
+    #key = "C:maj"
+
+    #converted_notes = []
+    #beat_counter = 0
+    #for beat in sampled_beats:
+        #beat_onset = beat_counter % 4 
+        #chord_tone, octave_offset, note_chord_function = beat
+        #note_midi_pitch = get_note_midi_pitch(chord_tone, note_chord_function, key, octave_offset)
+        #converted_notes.append((note_midi_pitch, 'crotchet', beat_onset))
+        #beat_counter += 1
+
+    #print(converted_notes)
+    #save_to_midi(converted_notes, "what.mid")
 
     #num_patterns = 3
     #max_duration = 10
@@ -160,21 +182,6 @@ if __name__ == "__main__":
 
     #_, states = note_emission_hsmm.sample(num_bars)
 
-    sampled_beats = hmm.sample(5)
-    notes = [(beat[0], beat[1], 'crotchet', 0.0) for beat in sampled_beats]
-    key = "C:maj"
-
-    converted_notes = []
-    beat_counter = 0
-    for beat in sampled_beats:
-        beat_onset = beat_counter % 4 
-        chord_tone, octave_offset, note_chord_function = beat
-        note_midi_pitch = get_note_midi_pitch(chord_tone, note_chord_function, key, octave_offset)
-        converted_notes.append((note_midi_pitch, 'crotchet', beat_onset))
-        beat_counter += 1
-
-    print(converted_notes)
-    save_to_midi(converted_notes, "what.mid")
    
     #sampled_chords = ['I', 'V', 'vi', 'IV', 'I', 'V', 'vi', 'IV', 'I', 'I']
     #sampled_skeleton_notes = [('root', 'root') for _ in range(num_bars)]
