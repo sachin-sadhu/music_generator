@@ -132,12 +132,29 @@ def save_to_midi(notes, output_path='output.mid', tempo=500000, ticks_per_beat=4
     mid.save(output_path)
 
 if __name__ == "__main__":
-    notes_file = '/home/sachin/Documents/music_generator/short_test_data/003/003.mid'
-    beat_file = '/home/sachin/Documents/music_generator/short_test_data/003/beat_midi.txt'
+    notes_file = '/home/sachin/Documents/music_generator/short_test_data/004/004.mid'
+    beat_file = '/home/sachin/Documents/music_generator/short_test_data/004/beat_midi.txt'
+    chord_file = '/home/sachin/Documents/music_generator/short_test_data/004/chord_midi.txt'
+    key_file = '/home/sachin/Documents/music_generator/short_test_data/004/key_audio.txt'
+
     beat_timing = load_beat_timings(beat_file)
     notes = load_midi_notes(notes_file)
-    grouping = get_skeleton_note_ornament_grouping(notes, beat_timing)
-    print(grouping)
+    chord_timings = load_chord_timings(chord_file)
+    song_key = load_key(key_file)
+
+    groupings = get_ornament_groupings(notes, beat_timing)
+    first_one = None
+    for group in groupings:
+        if len(group[2]) >= 3:
+            first_one = group
+            break
+    groupings = [first_one]
+    processed = prep_groupings_for_second_layer(groupings, chord_timings, song_key)
+    print(groupings)
+    print('\n')
+    print(processed)
+    
+    
     #hmm = HMM()
     #hmm.train_model(notes, beat_chords)
     #print(hmm.duration_matrix)

@@ -601,6 +601,36 @@ def get_note_at_beat_timing(beat_timing, notes, threshold=0.05):
 
     return None
 
+def get_closest_note_at_time(target_time, notes, threshold=0.4):
+    notes = sorted(notes, key=lambda i: i['start_seconds'])
+    current_closest_diff = 1000000
+    current_closest_note = None
+    for note in notes:
+        print(target_time)
+        diff = abs(note['start_seconds'] - target_time)
+        if diff < current_closest_diff:
+            current_closest_diff = diff
+            current_closest_note = note
+    
+    if current_closest_diff < threshold:
+        return current_closest_note
+
+    return None
+
+def get_notes_at_bar_onset(beat_timings, notes):
+    """
+        Gets all the notes at the start of each bar
+    """
+    bar_onset_notes = []
+    for beat_onset_seconds, _,  new_bar_note in beat_timings:
+        if new_bar_note == 0:
+            continue
+            
+        target_note = get_closest_note_at_time(beat_onset_seconds, notes)
+        bar_onset_notes.append(target_note)
+
+    return notes
+
 def get_ornaments(s1_onset, s2_onset, notes):
     """
         Given 2 skeleton notes, gets all the notes in between them
@@ -610,59 +640,139 @@ def get_ornaments(s1_onset, s2_onset, notes):
     inbetween_notes = [note for note in notes if s1_onset < note['start_seconds'] < s2_onset]
     return inbetween_notes
 
-def get_skeleton_note_pairs(notes, beat_timings):
-    """
-        Given the list of notes and beat timings, gets all beat note timings
-    """
+def get_strong_beat_pairs(notes, beat_timings):
+    strong_bar_beats = [beat for beat in beat_timings if beat[1] == 1.0]
+    strong_bar_beats = sorted(strong_bar_beats, key=lambda beat: beat[0])
+
     pairs = []
-    beat_timings.sort(key=lambda beat: beat[0])
-    
-    for i in range(len(beat_timings)-1):
-        curr_beat_timing = beat_timings[i][0]
-        next_beat_timing = beat_timings[i+1][0]
+    for i in range(len(strong_bar_beats)-1):
+        curr_beat_timing = strong_bar_beats[i][0]
+        next_beat_timing = strong_bar_beats[i+1][0]
 
-        curr_beat_note = get_note_at_beat_timing(curr_beat_timing, notes)
-        next_beat_note = get_note_at_beat_timing(next_beat_timing, notes)
+        curr_beat_note = get_closest_note_at_time(curr_beat_timing, notes)
+        next_beat_note = get_closest_note_at_time(next_beat_timing, notes)
 
-        if curr_beat_note is None or next_beat_note is None:
-            continue
-
-        pair = (curr_beat_note, next_beat_note)
-        pairs.append((pair))
+        if curr_beat_note is not None and next_beat_note is not None:
+            pairs.append((curr_beat_note, next_beat_note))
 
     return pairs
 
-def get_skeleton_note_ornament_grouping(notes, beat_timings):
+#def get_skeleton_note_pairs(notes, beat_timings):
+    #"""
+        #Given the list of notes and beat timings, gets all beat note timings
+    #"""
+    #beat_timings.sort(key=lambda beat: beat[0])
+    #pairs = []
+    #bar_onset_notes = get_notes_at_bar_onset(beat_timings, notes)
+
+    #for i in range(len(bar_onset_notes)-1):
+        #curr_beat_timing = beat_timings[i][0]
+        #next_beat_timing = beat_timings[i+1][0]
+
+        #curr_beat_note = get_note_at_beat_timing(curr_beat_timing, notes)
+        #next_beat_note = get_note_at_beat_timing(next_beat_timing, notes)
+
+        #if curr_beat_note is None or next_beat_note is None:
+            #continue
+
+        #pair = (curr_beat_note, next_beat_note)
+        #pairs.append((pair))
+
+    #return pairs
+
+def get_ornament_groupings(notes, beat_timings):
     """
         given the list of notes, groups them into skeleton notes and ornaments between those skeletons
     """
     # have in format [[s1,s2, [ornament notes]], [s1,s2, [ornament notes]]]
     groupings = []
-    skeleton_note_pairs = get_skeleton_note_pairs(notes, beat_timings)
+    strong_beat_pairs = get_strong_beat_pairs(notes, beat_timings)
 
-    for s1, s2 in skeleton_note_pairs:
+    for s1, s2 in strong_beat_pairs:
         ornaments = get_ornaments(s1['start_seconds'], s2['start_seconds'], notes)
         grouping = [s1,s2,ornaments]
         groupings.append(grouping)
 
     return groupings
 
-def ornament_note_role(prev_note, target_note, next_note, chord_tones):
-    step_from_prev = abs(target_note - prev_note)
-    step_to_next = abs(target_note - next_note)
-    same_direction = (prev_note < target_note < next_note) or (prev_note > target_note > next_note)
 
+""" 
+    given a list of ntoes, we want to define functions that 
+    - for each ornament note, determine the interval from the previous note 
+    - for each ornament note, determines the note role
+    - for each grouping, determine the chord function 
+    - for each grouping, determine the chord notes
+"""
 
-    if step_to_next == 1 and next_note in chord_tones and target_note not in chord_tones:
+def ornament_note_role(prev_note_pitch, target_note_pitch, next_note_pitch, chord_tones):
+    step_from_prev = abs(target_note_pitch - prev_note_pitch)
+    step_to_next = abs(target_note_pitch - next_note_pitch)
+    same_direction = (prev_note_pitch < target_note_pitch < next_note_pitch) or (prev_note_pitch > target_note_pitch > next_note_pitch)
+
+    prev_note_pitch_class = prev_note_pitch % 12
+    target_note_pitch_class = target_note_pitch % 12
+    next_note_pitch_class = next_note_pitch % 12
+
+    if step_to_next == 1 and next_note_pitch_class in chord_tones and target_note_pitch_class not in chord_tones:
         return "chromatic_approach"
     elif same_direction and step_from_prev <= 2:
         return "passing_tone"
     elif step_from_prev <= 2 and step_to_next <= 2 and not same_direction:
         return "neighbour_tone"
-    elif target_note in chord_tones:
+    elif target_note_pitch_class in chord_tones:
         return "chord_tone"
     else:
         return "other"
+
+def determine_chord_function(start_note_timing, chord_timings, song_key):
+    try:
+        chord = get_matching_chord(start_note_timing, chord_timings)
+        if chord == 'N':
+            return None
+        
+        transposed_chord = transpose_chord_to_c_major(chord, song_key)
+        chord_function = convert_chord_name_to_roman_numeral(transposed_chord)
+        return chord_function
+    except Exception:
+        return None
+
+def prep_groupings_for_second_layer(groupings, chord_timings, song_key):
+    '''
+        want a note to be in the format note:{
+                                                'role': 'blah',
+                                                'offset': '+2'
+                                            }
+    '''
+
+    '''
+        want list to be in the format [(s1, s2), [ornament_notes], chord_function]
+    '''
+    processed_groupings = []
+    for grouping in groupings:
+        s1 = grouping[0]
+        s2 = grouping[1]
+        ornament_notes = grouping[2]
+
+        chord = get_matching_chord(s1['start_seconds'], chord_timings)
+        chord_function = determine_chord_function(s1['start_seconds'], chord_timings, song_key)
+        chord_tone_notes = get_chord_tones(chord)
+        print(f'chord: {chord}')
+        print(f'chord_tone_notes: {chord_tone_notes}')
+
+        processed_ornament_notes = []
+        for i in range(1, len(ornament_notes)-1):
+            prev_note_midi_pitch = ornament_notes[i-1]['pitch']
+            curr_note_midi_pitch = ornament_notes[i]['pitch']
+            next_note_midi_pitch = ornament_notes[i+1]['pitch']
+
+            note_role = ornament_note_role(prev_note_midi_pitch, curr_note_midi_pitch, next_note_midi_pitch, chord_tone_notes)
+            note_offset = curr_note_midi_pitch - prev_note_midi_pitch
+
+            processed_ornament_notes.append((note_role, note_offset))
+        
+        processed_groupings.append([(s1,s2), processed_ornament_notes, chord_function])
+
+    return processed_groupings
 
 if __name__ == "__main__":
     directory = '/home/sachin/Documents/music_generator/short_test_data/'

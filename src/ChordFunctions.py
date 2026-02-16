@@ -247,6 +247,31 @@ def convert_chord_name_to_roman_numeral(chord_name: str):
 
     return root_to_degree[root_note]
 
+def get_chord_tones(chord_name):
+    CHORD_TEMPLATES = {
+        'C:maj': [0, 4, 7],
+        'C:min': [0, 3, 7],
+        'D:min': [2, 5, 9],
+        'D:maj': [2, 6, 9],
+        'E:min': [4, 7, 11],
+        'E:maj': [4, 8, 11],
+        'F:maj': [5, 9, 0],
+        'F:min': [5, 8, 0],
+        'G:maj': [7, 11, 2],
+        'G:min': [7, 10, 2],
+        'A:min': [9, 0, 4],
+        'A:maj': [9, 1, 4],
+        'B:min': [11, 2, 6],
+        'B:maj': [11, 3, 6],
+        'B:dim': [11, 2, 5],
+        'G:7': [7, 11, 2, 5]
+    }
+
+    if chord_name not in CHORD_TEMPLATES:
+        return []
+    
+    return CHORD_TEMPLATES[chord_name]
+
 def is_chord_tone(note_pitch, chord_name):
     """
     Determines if a given note pitch is a chord tone of the specified chord.
