@@ -1,10 +1,12 @@
 from mido import MidiFile, tick2second
 from ChordFunctions import *
+from collections import defaultdict
 import os
 
 def load_song_info(directory):
     all_song_notes = {}
     all_song_beat_chords = {}
+    all_song_groupings = {}
 
     # Loop through all songs
     for song_dir in sorted(os.listdir(directory)):
@@ -20,7 +22,7 @@ def load_song_info(directory):
 
         if all(os.path.exists(file) for file in [midi_file, chord_file, key_file, beat_file]):
             try:
-                song_key = load_key(key_file)[0]
+                song_key = load_key(key_file)
                 song_notes = load_midi_notes(midi_file)
                 chord_timings = load_chord_timings(chord_file)
                 beat_timings = load_beat_timings(beat_file)
@@ -33,6 +35,10 @@ def load_song_info(directory):
                 # Skip songs in minor keys for now
                 if get_chord_root_and_type(song_key)[1] == 'min':
                     continue
+
+                groupings = get_ornament_groupings(song_notes, beat_timings)
+                prepped_groupings = prep_groupings_for_second_layer(groupings, chord_timings, song_key)
+                all_song_groupings[song_dir] = prepped_groupings
 
                 # Process beat chords association
                 beats_chords = get_beats_chords(beat_timings, chord_timings)
@@ -78,7 +84,7 @@ def load_song_info(directory):
         else:
             print(f"Missing file for song {song_dir}")
 
-    return all_song_notes, all_song_beat_chords
+    return all_song_notes, all_song_beat_chords, all_song_groupings
 
 def get_tempo_from_midi(midi):
     """
@@ -463,7 +469,7 @@ def load_key(key_file_path):
                 key = parts[2]
                 keys.append(key)
 
-    return keys
+    return keys[0]
 
 def cap_notes_in_bar(bar_notes, beats_per_bar=4.0):
     for note in bar_notes:
@@ -684,17 +690,19 @@ def get_ornament_groupings(notes, beat_timings):
     """
         given the list of notes, groups them into skeleton notes and ornaments between those skeletons
     """
-    # have in format [[s1,s2, [ornament notes]], [s1,s2, [ornament notes]]]
+    # have in format [s1, ornament notes, s2]
     groupings = []
     strong_beat_pairs = get_strong_beat_pairs(notes, beat_timings)
 
     for s1, s2 in strong_beat_pairs:
-        ornaments = get_ornaments(s1['start_seconds'], s2['start_seconds'], notes)
-        grouping = [s1,s2,ornaments]
+        ornament_notes = get_ornaments(s1['start_seconds'], s2['start_seconds'], notes)
+        grouping = [s1]
+        for note in ornament_notes:
+            grouping.append(note)
+        grouping.append(s2)
         groupings.append(grouping)
 
     return groupings
-
 
 """ 
     given a list of ntoes, we want to define functions that 
@@ -709,7 +717,7 @@ def ornament_note_role(prev_note_pitch, target_note_pitch, next_note_pitch, chor
     step_to_next = abs(target_note_pitch - next_note_pitch)
     same_direction = (prev_note_pitch < target_note_pitch < next_note_pitch) or (prev_note_pitch > target_note_pitch > next_note_pitch)
 
-    prev_note_pitch_class = prev_note_pitch % 12
+    #prev_note_pitch_class = prev_note_pitch % 12
     target_note_pitch_class = target_note_pitch % 12
     next_note_pitch_class = next_note_pitch % 12
 
@@ -733,7 +741,7 @@ def determine_chord_function(start_note_timing, chord_timings, song_key):
         transposed_chord = transpose_chord_to_c_major(chord, song_key)
         chord_function = convert_chord_name_to_roman_numeral(transposed_chord)
         return chord_function
-    except Exception:
+    except Exception as e:
         return None
 
 def prep_groupings_for_second_layer(groupings, chord_timings, song_key):
@@ -749,21 +757,24 @@ def prep_groupings_for_second_layer(groupings, chord_timings, song_key):
     '''
     processed_groupings = []
     for grouping in groupings:
+        
+        ### If only no onrmanet notes inbetween, skip
+        if len(grouping) <= 2:
+            continue
+
         s1 = grouping[0]
-        s2 = grouping[1]
-        ornament_notes = grouping[2]
+        s2 = grouping[-1]
 
         chord = get_matching_chord(s1['start_seconds'], chord_timings)
         chord_function = determine_chord_function(s1['start_seconds'], chord_timings, song_key)
         chord_tone_notes = get_chord_tones(chord)
-        print(f'chord: {chord}')
         print(f'chord_tone_notes: {chord_tone_notes}')
 
         processed_ornament_notes = []
-        for i in range(1, len(ornament_notes)-1):
-            prev_note_midi_pitch = ornament_notes[i-1]['pitch']
-            curr_note_midi_pitch = ornament_notes[i]['pitch']
-            next_note_midi_pitch = ornament_notes[i+1]['pitch']
+        for i in range(1, len(grouping)-1):
+            prev_note_midi_pitch = grouping[i-1]['pitch']
+            curr_note_midi_pitch = grouping[i]['pitch']
+            next_note_midi_pitch = grouping[i+1]['pitch']
 
             note_role = ornament_note_role(prev_note_midi_pitch, curr_note_midi_pitch, next_note_midi_pitch, chord_tone_notes)
             note_offset = curr_note_midi_pitch - prev_note_midi_pitch
@@ -774,8 +785,27 @@ def prep_groupings_for_second_layer(groupings, chord_timings, song_key):
 
     return processed_groupings
 
-if __name__ == "__main__":
-    directory = '/home/sachin/Documents/music_generator/short_test_data/'
-    notes, beat_chords = load_song_info(directory)
-    print(notes)
-    print(beat_chords)
+# here the ornament_groupings_dict is the dict where song followed by a list of lists 
+
+# each (interval offset, chord function) pairing has its HMM. so when training given the list of groupings, for each song, we want to identify
+#which ornament grouping this belongs to, then we should add the grouping to some sort of list that is then iterated through when training 
+
+def split_song_ornaments(ornament_groupings_dict):
+    # want to split into (offset, chord_function): [[ornament], [ornament]]
+    offset_chord_function_dict = defaultdict(list)
+    
+    # here the ornament_groupings_dict is the dict where song followed by a list of lists 
+
+    # each (interval offset, chord function) pairing has its HMM. so when training given the list of groupings, for each song, we want to identify
+    #which ornament grouping this belongs to, then we should add the grouping to some sort of list that is then iterated through when training 
+    for song_groupings in ornament_groupings_dict.values():
+        for grouping in song_groupings:
+            skeleton_note_one_midi_pitch = grouping[0][0]['pitch']
+            skeleton_note_two_midi_pitch = grouping[0][1]['pitch']
+            offset = skeleton_note_one_midi_pitch - skeleton_note_two_midi_pitch
+            chord_function = grouping[-1]
+            ornament_notes = grouping[1]
+
+            offset_chord_function_dict[(offset, chord_function)].append(ornament_notes)
+
+    return offset_chord_function_dict
