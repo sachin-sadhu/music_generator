@@ -1,6 +1,7 @@
 from mido import MidiFile, tick2second
 from ChordFunctions import *
 from collections import defaultdict
+from SecondLayerHMM import *
 import os
 
 def load_song_info(directory):
@@ -809,3 +810,12 @@ def split_song_ornaments(ornament_groupings_dict):
             offset_chord_function_dict[(offset, chord_function)].append(ornament_notes)
 
     return offset_chord_function_dict
+
+def train_all_hmms(ornament_groupings_dict):
+    hmms = {}
+    for offset_chordfunction, training_data in ornament_groupings_dict.values():
+        current_hmm = SecondLayerHMM()
+        current_hmm.train_model(training_data)
+        hmms[offset_chordfunction] = current_hmm
+
+    return hmms

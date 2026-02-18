@@ -5,58 +5,7 @@ from ChordFunctions import *
 from ChordTraining import *
 from NoteEmission import initalise_tmat, get_note_midi_pitch
 from HMM import HMM
-from SecondLayerHMM import SecondLayerHMM
-import numpy as np
-
-def generate_song(num_bars):
-    directory = '/cs/home/slzys1/Documents/music_generator/test_data'
-    bars, bars_chords = load_songs(directory)
-    filtered_bars, filtered_bars_chords = filter_empty_bars_no_chord(bars, bars_chords)
-
-    num_patterns = 2
-    max_duration = 10
-    obs_array = np.array(filtered_bars, dtype=object)
-    durations = np.random.dirichlet(np.ones(max_duration), size=num_patterns)
-    tmat = initalise_tmat(num_patterns)
-
-    note_emission = NoteEmission(num_patterns, filtered_bars_chords)
-    note_emission_hsmm = HSMMModel(
-        note_emission, durations, tmat
-    )
-
-    note_emission.set_context(filtered_bars_chords, filtered_bars_chords)
-    result = note_emission_hsmm.fit(obs_array)
-    decoded_states = note_emission_hsmm.decode(filtered_bars)
-    key = 'C:maj'
-
-    pattern_bars = build_pattern_bars_dict(filtered_bars, filtered_bars_chords, decoded_states)
-    chains = build_chains(num_patterns, pattern_bars)
-
-    _, states = note_emission_hsmm.sample(num_bars)
-    chord_model = ChordTransitionModel()
-    chord_model.train(filtered_bars_chords)
-    
-    sampled_chord_sequence = chord_model.generate_chord_sequence(num_bars)
-    sampled_song = []
-    for i in range(num_bars):
-        bar_pattern = states[i]
-        bar_chord = sampled_chord_sequence[i]
-
-        print(f'bar pattern: {bar_pattern}. bar chord: {bar_chord}')
-        
-        chain = chains[bar_pattern]
-        sampled_bar = chain.sample_bar(bar_chord)
-
-        bar_midi_note = []
-        for note in sampled_bar:
-            chord_tone, _, note_duration, note_onset = note
-            note_midi_pitch = get_note_midi_pitch(chord_tone, bar_chord, key)
-            note_formatted = (note_midi_pitch, note_duration, note_onset)
-            bar_midi_note.append(note_formatted)
-
-        sampled_song.append(bar_midi_note)
-
-    return sampled_song
+from SecondLayerGen import *
 
 def save_to_midi(notes, output_path='output.mid', tempo=500000, ticks_per_beat=480):
     """
@@ -132,27 +81,51 @@ def save_to_midi(notes, output_path='output.mid', tempo=500000, ticks_per_beat=4
 
     mid.save(output_path)
 
+def fill_ornament_notes(skeleton_notes, ornament_generator: SecondLayerGen):
+    ### skeelton notes should be in format (midi_pitch, duration, chord_function) 
+    full_sequence = []
+    for i in range(len(skeleton_notes)-1):
+        note_1_pitch = skeleton_notes[i][0]
+        note_2_pitch = skeleton_notes[i+1][0]
+        offset = note_1_pitch - note_2_pitch
+        chord_function = skeleton_notes[i][-1]
+
+        ornament_notes = ornament_generator.generate_sequence(offset, chord_function)
+        full_sequence.append(note_1_pitch)
+
+        for ornament_note in ornament_notes:
+            print('yeet')
+            note_midi = full_sequence[-1] + ornament_note
+            full_sequence.append(note_midi)
+
+    final_note_pitch = skeleton_notes[-1][0]
+    full_sequence.append(final_note_pitch)
+    return full_sequence
+
 if __name__ == "__main__":
     directory = "/cs/home/slzys1/Documents/music_generator/short_test_data/"
-    _, _, groupings = load_song_info(directory)
+    song_notes, all_song_beat_chords, groupings = load_song_info(directory)
     split = split_song_ornaments(groupings)
-    print(split)
 
-    #sampled_beats = hmm.sample(5)
-    #notes = [(beat[0], beat[1], 'crotchet', 0.0) for beat in sampled_beats]
-    #key = "C:maj"
+    chord_beat_hmm = HMM()
+    chord_beat_hmm.train_model(song_notes, all_song_beat_chords)
+    sampled_beats = chord_beat_hmm.sample(5)
 
-    #converted_notes = []
-    #beat_counter = 0
-    #for beat in sampled_beats:
-        #beat_onset = beat_counter % 4 
-        #chord_tone, octave_offset, note_chord_function = beat
-        #note_midi_pitch = get_note_midi_pitch(chord_tone, note_chord_function, key, octave_offset)
-        #converted_notes.append((note_midi_pitch, 'crotchet', beat_onset))
-        #beat_counter += 1
+    sampled_beats = [(get_note_midi_pitch(note[0], note[-1], 'C:maj', note[1]), note[-1]) for note in sampled_beats]
+    second_layer = SecondLayerGen()
+    second_layer.train_hmms(split)
+    filled = fill_ornament_notes(sampled_beats, second_layer)
+    print(filled)
 
-    #print(converted_notes)
-    #save_to_midi(converted_notes, "what.mid")
+    converted_notes = []
+    beat_counter = 0
+    for count, note in enumerate(filled):
+        beat_onset = count % 4
+        converted_notes.append((note, 'crotchet', beat_onset))
+        beat_counter += 1
+
+    print(converted_notes)
+    save_to_midi(converted_notes, "what.mid")
 
     #num_patterns = 3
     #max_duration = 10

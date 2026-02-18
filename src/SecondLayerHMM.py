@@ -7,10 +7,21 @@ class SecondLayerHMM:
         self.emission_matrix = None
         self.initial_probabilities = None
 
+    def calc_initial_probabilities(self):
+        initial_probabilities = {}
+        print(f'hidden states: {self.transition_matrix.keys()}')
+        hidden_states = list(self.transition_matrix.keys())
 
-    """
-        want it to be in the form of [(s1,s2), [(ornament_role, offset), (ornament_role, offset)], chord_function]
-    """
+        if len(hidden_states) == 0:
+            raise ValueError("HMM has no hidden states")
+
+        uniform_prob = 1.0 / len(hidden_states)
+        
+        for hidden_state in hidden_states:
+            initial_probabilities[hidden_state] = uniform_prob
+
+        return initial_probabilities
+
     def calc_transition_matrix(self, ornament_groupings):
         transition_count = defaultdict(lambda: defaultdict(int))
 
@@ -69,19 +80,27 @@ class SecondLayerHMM:
 
         return emission_notes[np.random.choice(len(emission_notes), p=emission_probs)]
 
+    def sample_initial_state(self):
+        hidden_states = list(self.initial_probabilities.keys())
+        probs = list(self.initial_probabilities.values())
+        return hidden_states[np.random.choice(len(hidden_states), p=probs)]
+
     def train_model(self, ornament_groupings):
-        self.transition_matrix = self.calc_transition_matrix(ornament_groupings)
-        self.emission_matrix = self.calc_emission_matrix(ornament_groupings)
+        try:
+            self.transition_matrix = self.calc_transition_matrix(ornament_groupings)
+            self.emission_matrix = self.calc_emission_matrix(ornament_groupings)
+            self.initial_probabilities = self.calc_initial_probabilities()
+        except ValueError as e:
+            raise e
 
     def sample(self, num_samples=10):
-        current_state = 'chord_tone'
+        current_state = self.sample_initial_state()
         current_emission = self.sample_emission(current_state)
 
         sampled_hidden_states = [current_state]
         sampled_emissions = [current_emission]
 
         while len(sampled_emissions) < num_samples:
-            # Sampled next hidden state and emission
             current_state = self.sample_next_hidden_state(current_state)
             current_emission = self.sample_emission(current_state)
             
