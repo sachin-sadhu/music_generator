@@ -2,6 +2,11 @@ from mido import MidiFile, tick2second
 from ChordFunctions import *
 from collections import defaultdict
 from SecondLayerHMM import *
+from Note import Note
+from BeatTiming import BeatTiming
+from ChordTiming import ChordTiming
+from SongInfo import SongInfo
+from OrnamentGroupings import *
 import os
 
 def load_song_info(directory):
@@ -23,10 +28,7 @@ def load_song_info(directory):
 
         if all(os.path.exists(file) for file in [midi_file, chord_file, key_file, beat_file]):
             try:
-                song_key = load_key(key_file)
-                song_notes = load_midi_notes(midi_file)
-                chord_timings = load_chord_timings(chord_file)
-                beat_timings = load_beat_timings(beat_file)
+                song_info = SongInfo(key_file, midi_file, chord_file, beat_file)
 
                 #bars = group_notes_by_bar(notes)
                 #bar_timings = get_all_bar_timings(bars, 120)
@@ -34,22 +36,24 @@ def load_song_info(directory):
                 #notes_chord_assigned = assign_chord_to_notes(notes, chord_timings)
 
                 # Skip songs in minor keys for now
-                if get_chord_root_and_type(song_key)[1] == 'min':
+                if get_chord_root_and_type(song_info.song_key)[1] == 'min':
                     continue
 
-                groupings = get_ornament_groupings(song_notes, beat_timings)
-                prepped_groupings = prep_groupings_for_second_layer(groupings, chord_timings, song_key)
+                groupings = get_ornament_groupings(song_info.notes, song_info.beat_timings)
+                prepped_groupings = prep_groupings_for_second_layer(groupings, song_info.chord_timings, song_info.song_key)
                 all_song_groupings[song_dir] = prepped_groupings
 
                 # Process beat chords association
-                beats_chords = get_beats_chords(beat_timings, chord_timings)
+                beats_chords = get_beats_matching_chords(song_info.beat_timings, song_info.chord_timings)
                 beats_chords_function = []
-                for beat_chord in beats_chords:
+                for matched_chord in beats_chords:
                     try:
-                        if beat_chord == 'N':
+                        if matched_chord is None:
+                            beats_chords_function.append('N')
+                        elif matched_chord.get_chord_name() == 'N':
                             beats_chords_function.append('N')
                         else:
-                            transposed_chord = transpose_chord_to_c_major(beat_chord, song_key)
+                            transposed_chord = transpose_chord_to_c_major(matched_chord, song_info.song_key)
                             chord_function = convert_chord_name_to_roman_numeral(transposed_chord)
                             beats_chords_function.append(chord_function)
                     except Exception as e:
@@ -58,14 +62,14 @@ def load_song_info(directory):
 
                 # Process song notes
                 song_notes_filtered = []
-                for note in song_notes:
+                for note in song_info.notes:
                     try:
-                        note_cooresponding_chord = get_matching_chord(note['start_seconds'], chord_timings)
-                        if note_cooresponding_chord == 'N':
+                        note_cooresponding_chord = get_matching_chord(note, song_info.chord_timings)
+                        if note_cooresponding_chord is None or note_cooresponding_chord == 'N':
                             continue
 
-                        note_chord_tone = get_note_chord_tone(note['pitch'], note_cooresponding_chord)
-                        transposed_chord = transpose_chord_to_c_major(note_cooresponding_chord, song_key)
+                        note_chord_tone = note.get_note_chord_tone(note_cooresponding_chord)
+                        transposed_chord = transpose_chord_to_c_major(note_cooresponding_chord, song_info.song_key)
                         chord_function = convert_chord_name_to_roman_numeral(transposed_chord)
 
                         # Add new attributes to note dict
@@ -135,50 +139,23 @@ def load_midi_notes(midi_path):
             if msg.note in active_notes:
                 curr_note = active_notes[msg.note]
 
-                #tick_onset = curr_note['start_tick']
-                #tick_duration = current_tick - tick_onset
-                #beat_duration = tick_duration / ticks_per_beat
-                #(bar_index, beat_position) = calculate_beat_position(ticks_per_bar, ticks_per_beat, tick_onset)
-                #quantised_beat_position = quantise_beat_position(beat_position)
-                #note_type = quantise_beat_duration(beat_duration)
+                seconds_onset = curr_note['start_seconds']
+                tick_onset = curr_note['start_tick']
+                tick_duration = current_tick - tick_onset
+                beat_duration = tick_duration / ticks_per_beat
+                note_duration = quantise_beat_duration(beat_duration)
+                clef = 'treble' if msg.note >= 60 else 'bass'
 
-                #curr_note['tick_duration'] = tick_duration
-                #curr_note['beat_duration'] = beat_duration
-                #curr_note['beat_onset'] = quantised_beat_position
-                #curr_note['bar_index'] = bar_index
-                #curr_note['note_type'] = note_type
-                curr_note['end_seconds'] = current_seconds
-                curr_note['clef'] = 'treble' if msg.note >= 60 else 'bass'
-
-                notes.append(curr_note)
+                note = Note(msg.note, clef, note_duration, seconds_onset)
+                notes.append(note)
                 del active_notes[msg.note]
 
-    notes = sorted(notes, key=lambda note: note['start_seconds'])
-    treble_clef = [note for note in notes if note['clef'] == 'treble']
-    
-    return treble_clef
+    return notes
 
-def load_beat_timings(beat_file_path):
-    beats = []
-    with open(beat_file_path, 'r') as f:
-        for line in f:
-            line = line.strip()
-            parts = line.split(' ')
-
-            if len(parts) >= 3:
-                beat_time = float(parts[0])
-                beat_strong_beat = float(parts[1])
-                beat_new_bar = float(parts[2])
-
-                beats.append((beat_time, beat_strong_beat, beat_new_bar))
-
-    return beats
-
-def get_beats_chords(beat_timings, chord_timings):
+def get_beats_matching_chords(beat_timings: list[BeatTiming], chord_timings: list[ChordTiming]) -> list[ChordTiming | None]:
     beat_chords = []
     for beat in beat_timings:
-        beat_onset = beat[0]
-        matched_chord = get_matching_chord(beat_onset, chord_timings)
+        matched_chord = get_matching_chord(beat.get_onset_time(), chord_timings)
         beat_chords.append(matched_chord)
 
     return beat_chords
@@ -207,10 +184,12 @@ def split_beat_timings_to_bars(beat_timings):
     continoulsy add until we see another 1.0
 """
 
-def get_matching_chord(onset, chord_timings):
-    for chord_start, chord_end, chord_label in chord_timings:
-        if chord_start <= onset <= chord_end:
-            return chord_label
+def get_matching_chord(note: Note, chord_timings: list[ChordTiming]) -> ChordTiming | None:
+    for chord in chord_timings:
+        if chord.get_chord_start() <= note.get_start_seconds() <= chord.get_chord_end():
+            return chord
+    return None
+    
 
 def calculate_beat_position(ticks_per_bar, ticks_per_beat, tick_onset):
     """
@@ -233,109 +212,6 @@ def calculate_beat_position(ticks_per_bar, ticks_per_beat, tick_onset):
 
 def quantise_beat_position(beat_position, grid_size=0.5):
     return round(beat_position / grid_size) * grid_size
-
-def quantise_beat_duration(beat_duration, grid_size=0.5, max_duration=4.0):
-    """
-    Quantise a beat duration to the nearest musical note value.
-
-    Args:
-        beat_duration (float): The duration of the beat to quantise, in beats.
-        grid_size (float, optional): The grid size for quantisation. Defaults to 0.5.
-        max_duration (float, optional): The maximum allowed duration. Defaults to 4.0.
-
-    Returns:
-        str: The name of the musical note value (e.g., 'crotchet', 'quaver', 'semibreve')
-             that best represents the quantised beat duration.
-    """
-    DURATION_BINS = {
-        0.25: 'semiquaver',
-        0.50: 'quaver',
-        0.75: 'dotted_quaver',
-        1.0: 'crotchet',
-        1.5: 'dotted_crotchet',
-        2.0: 'minim',
-        3: 'dotted_minim',
-        4: 'semibreve'
-    }
-
-    quantised = round(beat_duration / grid_size) * grid_size
-
-    if quantised < grid_size:
-        quantised = grid_size
-    if quantised > max_duration:
-        quantised = max_duration
-
-    closest = min(DURATION_BINS.keys(), key=lambda x: abs(x-quantised))
-    return DURATION_BINS[closest]
-
-def get_note_chord_tone(note_midi_pitch, chord):
-    """
-    Determines the relationship of a note to a given chord in terms of intervals and octave offset.
-
-    Args:
-        note_midi_pitch (int): The MIDI pitch value of the note (0-127).
-        chord (str): The chord name (e.g., 'Cmaj', 'Amin').
-
-    Returns:
-        tuple: A tuple containing:
-            - chord_tone (str): The interval name relative to the chord root 
-              (e.g., 'root', '3rd', '5th', 'b7').
-            - octave_offset (int): The number of octaves the note is above or below 
-              the chord root in octave 4.
-
-    Example:
-        >>> get_note_chord_tone(64, 'Cmaj')
-        ('3rd', 0)
-        >>> get_note_chord_tone(72, 'Cmaj')
-        ('root', 1)
-
-    Note:
-        Uses major scale intervals for major chords and minor scale intervals for minor chords.
-        The reference octave for the chord root is octave 4 (middle C = 60).
-    """
-    ## Given chord and a note, wantt o figure out note representation relative to the chord
-    octave_4_note_midi_pitch_mapping = {
-        'C': 60,
-        'C#': 61, 'Db': 61,
-        'D': 62,
-        'D#': 63, 'Eb': 63,
-        'E': 64,
-        'F': 65,
-        'F#': 66, 'Gb': 66,
-        'G': 67,
-        'G#': 68, 'Ab': 68,
-        'A': 69,
-        'A#': 70, 'Bb': 70,
-        'B': 71
-    }
-
-    chromatic_intervals = {
-        0: "root", 
-        1: "b2", 
-        2: "2nd", 
-        3: "b3",   # minor 3rd
-        4: "3rd",  # major 3rd
-        5: "4th",
-        6: "b5",   # tritone
-        7: "5th", 
-        8: "b6",   # minor 6th
-        9: "6th",  # major 6th
-        10: "b7",  # minor 7th
-        11: "7th"  # major 7th
-    }
-
-    try:
-        (chord_root_note, chord_type) = get_chord_root_and_type(chord)
-        chord_root_midi_pitch = octave_4_note_midi_pitch_mapping[chord_root_note]
-        semitone_offset = note_midi_pitch - chord_root_midi_pitch
-        pitch_class_offset = semitone_offset % 12
-        octave_offset = semitone_offset // 12
-
-        chord_tone = chromatic_intervals[pitch_class_offset]
-    except Exception as e:
-        return ("root", 0)
-
-    return (chord_tone, octave_offset)
 
 def group_notes_by_bar(notes):
     """
@@ -388,89 +264,6 @@ def get_all_bar_timings(bars, beats_per_min, beats_per_bar=4.0):
 
     bar_timings = [get_bar_timings(i) for i in range(len(bars))]
     return bar_timings
-
-def assign_chords_to_bars(bar_timings, chord_timings):
-    """
-    Assign chord labels to musical bars based on maximum temporal overlap.
-    This function determines which chord best represents each bar by calculating
-    the overlap duration between each bar's time span and all available chords,
-    then selecting the chord with the maximum overlap for that bar.
-    Args:
-        bar_timings (list of tuple): A list of tuples where each tuple contains
-            (bar_start, bar_end) representing the start and end times of each bar
-            in the musical piece.
-        chord_timings (list of tuple): A list of tuples where each tuple contains
-            (chord_start, chord_end, chord_label) representing the start time,
-            end time, and label of each chord.
-    Returns:
-        list: A list of chord labels corresponding to each bar in bar_timings.
-            Each element is the chord label that has the maximum overlap with
-            the corresponding bar. May contain None if no chord overlaps with a bar.
-    """
-    bar_chords = []
-
-    for bar_start, bar_end in bar_timings:
-        current_max_overlap = 0
-        current_best_chord = None
-        for chord_start, chord_end, chord_label in chord_timings:
-            overlap_start = max(bar_start, chord_start)
-            overlap_end = min(bar_end, chord_end)
-
-            overlap_duration = max(0, overlap_end - overlap_start)
-
-            if overlap_duration > current_max_overlap:
-                current_best_chord = chord_label
-                current_max_overlap = overlap_duration
-            
-        bar_chords.append(current_best_chord)
-
-    return bar_chords
-
-def load_chord_timings(chord_file_path):
-    """
-    Load chord timings from a chord annotation file.
-
-    This function reads a chord annotation file where each line contains tab-separated
-    values representing chord timing information and returns a list of chord timing tuples.
-
-    Args:
-        chord_file_path (str): Path to the chord annotation file. The file should contain
-            tab-separated values with at least 3 columns: start time, end time, and chord label.
-
-    Returns:
-        list of tuple: A list of tuples where each tuple contains:
-            - chord_start (float): The start time of the chord in seconds
-            - chord_end (float): The end time of the chord in seconds
-            - chord_label (str): The label/name of the chord
-    """
-    chord_timings = []
-
-    with open(chord_file_path, 'r') as f:
-        for line in f:
-            line = line.strip()
-            parts = line.split('\t')
-
-            if len(parts) >= 3:
-                chord_start = float(parts[0])
-                chord_end = float(parts[1])
-                chord_label = parts[2]
-                chord_timings.append((chord_start, chord_end, chord_label))
-
-    return chord_timings
-
-def load_key(key_file_path):
-    keys = []
-
-    with open(key_file_path, 'r') as f:
-        for line in f:
-            line = line.strip()
-            parts = line.split('\t')
-
-            if len(parts) >= 3:
-                key = parts[2]
-                keys.append(key)
-
-    return keys[0]
 
 def cap_notes_in_bar(bar_notes, beats_per_bar=4.0):
     for note in bar_notes:
@@ -566,37 +359,6 @@ def get_note_midi_pitch(chord_tone, chord_roman_numeral, key, octave_offset=0):
 
     return note_midi_pitch
 
-def analyze_chromatic_frequency(skeleton_list):
-    """Check how often chromatic notes appear on each chord type."""
-    chromatic = {'b2', 'b5'}  # Most suspicious ones
-    
-    chord_chromatic_count = {}
-    chord_total_count = {}
-    
-    for item in skeleton_list:
-        chord = item[0]
-        notes = [n for n in item[1:] if n is not None]
-        
-        chord_total_count[chord] = chord_total_count.get(chord, 0) + len(notes)
-        
-        for note in notes:
-            if note in chromatic:
-                chord_chromatic_count[chord] = chord_chromatic_count.get(chord, 0) + 1
-    
-    print("Chromatic (b2, b5) frequency by chord:")
-    for chord in chord_total_count:
-        count = chord_chromatic_count.get(chord, 0)
-        total = chord_total_count[chord]
-        pct = (count / total) * 100 if total > 0 else 0
-        print(f"  {chord}: {count}/{total} ({pct:.1f}%)")
-
-def is_note_on_beat(note_onset_seconds, beat_timings, threshold=0.05):
-    for beat_timing in beat_timings:
-        beat_onset_seconds = beat_timing[0]
-        if abs(beat_onset_seconds - note_onset_seconds) <= threshold:
-            return True
-    return False
-
 def get_note_at_beat_timing(beat_timing, notes, threshold=0.05):
     notes = sorted(notes, key=lambda i: i['start_seconds'])
     for note in notes:
@@ -608,13 +370,13 @@ def get_note_at_beat_timing(beat_timing, notes, threshold=0.05):
 
     return None
 
-def get_closest_note_at_time(target_time, notes, threshold=0.4):
-    notes = sorted(notes, key=lambda i: i['start_seconds'])
+def get_closest_note_at_time(target_time, notes: list[Note], threshold=0.4) -> Note | None:
+    notes = sorted(notes, key=lambda note: note.get_start_seconds())
     current_closest_diff = 1000000
     current_closest_note = None
     for note in notes:
         print(target_time)
-        diff = abs(note['start_seconds'] - target_time)
+        diff = abs(note.get_start_seconds() - target_time)
         if diff < current_closest_diff:
             current_closest_diff = diff
             current_closest_note = note
@@ -624,37 +386,37 @@ def get_closest_note_at_time(target_time, notes, threshold=0.4):
 
     return None
 
-def get_notes_at_bar_onset(beat_timings, notes):
-    """
-        Gets all the notes at the start of each bar
-    """
-    bar_onset_notes = []
-    for beat_onset_seconds, _,  new_bar_note in beat_timings:
-        if new_bar_note == 0:
-            continue
+#def get_notes_at_bar_onset(beat_timings, notes):
+    #"""
+        #Gets all the notes at the start of each bar
+    #"""
+    #bar_onset_notes = []
+    #for beat_onset_seconds, _,  new_bar_note in beat_timings:
+        #if new_bar_note == 0:
+            #continue
             
-        target_note = get_closest_note_at_time(beat_onset_seconds, notes)
-        bar_onset_notes.append(target_note)
+        #target_note = get_closest_note_at_time(beat_onset_seconds, notes)
+        #bar_onset_notes.append(target_note)
 
-    return notes
+    #return notes
 
-def get_ornaments(s1_onset, s2_onset, notes):
+def get_ornaments(s1_onset, s2_onset, notes) -> list[Note]:
     """
-        Given 2 skeleton notes, gets all the notes in between them
+        Given 2 skeleton notes onset times, gets all the notes in between them
     """
     # Given the onset in seconds of 2 notes, want to find all the notes that fall in between them  
-    notes = sorted(notes, key=lambda i: i['start_seconds'])
-    inbetween_notes = [note for note in notes if s1_onset < note['start_seconds'] < s2_onset]
+    notes = sorted(notes, key=lambda note: note.get_start_seconds())
+    inbetween_notes = [note for note in notes if s1_onset < note.get_start_seconds() < s2_onset]
     return inbetween_notes
 
-def get_strong_beat_pairs(notes, beat_timings):
-    strong_bar_beats = [beat for beat in beat_timings if beat[1] == 1.0]
-    strong_bar_beats = sorted(strong_bar_beats, key=lambda beat: beat[0])
+def get_strong_beat_pairs(notes, beat_timings: list[BeatTiming]) -> list[tuple[Note, Note]]:
+    strong_bar_beats = [beat for beat in beat_timings if beat.is_strong_beat()]
+    strong_bar_beats = sorted(strong_bar_beats, key=lambda beat: beat.get_onset_time())
 
     pairs = []
     for i in range(len(strong_bar_beats)-1):
-        curr_beat_timing = strong_bar_beats[i][0]
-        next_beat_timing = strong_bar_beats[i+1][0]
+        curr_beat_timing = strong_bar_beats[i].get_onset_time()
+        next_beat_timing = strong_bar_beats[i+1].get_onset_time()
 
         curr_beat_note = get_closest_note_at_time(curr_beat_timing, notes)
         next_beat_note = get_closest_note_at_time(next_beat_timing, notes)
@@ -687,7 +449,7 @@ def get_strong_beat_pairs(notes, beat_timings):
 
     #return pairs
 
-def get_ornament_groupings(notes, beat_timings):
+def get_ornament_groupings(notes, beat_timings) -> list[list[Note]]:
     """
         given the list of notes, groups them into skeleton notes and ornaments between those skeletons
     """
@@ -696,7 +458,7 @@ def get_ornament_groupings(notes, beat_timings):
     strong_beat_pairs = get_strong_beat_pairs(notes, beat_timings)
 
     for s1, s2 in strong_beat_pairs:
-        ornament_notes = get_ornaments(s1['start_seconds'], s2['start_seconds'], notes)
+        ornament_notes = get_ornaments(s1.get_start_seconds(), s2.get_start_seconds(), notes)
         grouping = [s1]
         for note in ornament_notes:
             grouping.append(note)
@@ -733,58 +495,69 @@ def ornament_note_role(prev_note_pitch, target_note_pitch, next_note_pitch, chor
     else:
         return "other"
 
-def determine_chord_function(start_note_timing, chord_timings, song_key):
+def determine_chord_function(note: Note, chord_timings, song_key):
     try:
-        chord = get_matching_chord(start_note_timing, chord_timings)
-        if chord == 'N':
-            return None
+        chord = get_matching_chord(note, chord_timings)
+
+        if chord is None or chord.get_chord_name() == 'N':
+            return 'N'
         
         transposed_chord = transpose_chord_to_c_major(chord, song_key)
         chord_function = convert_chord_name_to_roman_numeral(transposed_chord)
         return chord_function
-    except Exception as e:
+    except Exception:
         return None
 
-def prep_groupings_for_second_layer(groupings, chord_timings, song_key):
+def get_ornament_groupings(notes: list[Note], chord_timings, beat_timings, song_key) -> list[OrnamentGrouping]:
     '''
         want a note to be in the format note:{
                                                 'role': 'blah',
-                                                'offset': '+2'
+                                                'offset': '+2',
+                                                'note_duration': 'quaver'
                                             }
     '''
 
     '''
         want list to be in the format [(s1, s2), [ornament_notes], chord_function]
     '''
-    processed_groupings = []
-    for grouping in groupings:
-        
-        ### If only no onrmanet notes inbetween, skip
-        if len(grouping) <= 2:
+    groupings = []
+
+    strong_beat_pairs = get_strong_beat_pairs(notes, beat_timings)
+    for skeleton_one, skeleton_two in strong_beat_pairs:
+        ornament_notes = get_ornaments(skeleton_one.get_start_seconds(), skeleton_two.get_start_seconds(), notes)
+
+        # skip if no ornament notes between these 2 skeleton notes
+        if len(ornament_notes) == 0:
             continue
 
-        s1 = grouping[0]
-        s2 = grouping[-1]
+        chord = get_matching_chord(skeleton_two, chord_timings)
+        chord_function = determine_chord_function(skeleton_two, chord_timings, song_key)
 
-        chord = get_matching_chord(s1['start_seconds'], chord_timings)
-        chord_function = determine_chord_function(s1['start_seconds'], chord_timings, song_key)
-        chord_tone_notes = get_chord_tones(chord)
-        print(f'chord_tone_notes: {chord_tone_notes}')
+        if chord_function is None or chord_function == 'N':
+            continue
 
         processed_ornament_notes = []
-        for i in range(1, len(grouping)-1):
-            prev_note_midi_pitch = grouping[i-1]['pitch']
-            curr_note_midi_pitch = grouping[i]['pitch']
-            next_note_midi_pitch = grouping[i+1]['pitch']
+        ornament_notes.insert(0, skeleton_one)
+        ornament_notes.append(skeleton_two)
+
+        chord_tone_notes = get_chord_tones(chord)
+
+        for i in range(1, len(ornament_notes)-1):
+            prev_note_midi_pitch = ornament_notes[i-1].get_midi_pitch()
+            curr_note_midi_pitch = ornament_notes[i].get_midi_pitch()
+            next_note_midi_pitch = ornament_notes[i+1].get_midi_pitch()
 
             note_role = ornament_note_role(prev_note_midi_pitch, curr_note_midi_pitch, next_note_midi_pitch, chord_tone_notes)
             note_offset = curr_note_midi_pitch - prev_note_midi_pitch
+            note_duration = ornament_notes[i].get_duration()
 
-            processed_ornament_notes.append((note_role, note_offset))
-        
-        processed_groupings.append([(s1,s2), processed_ornament_notes, chord_function])
+            ornament_note = OrnamentNote(note_role, note_offset, note_duration)
+            processed_ornament_notes.append(ornament_note)
 
-    return processed_groupings
+        ornament_grouping = OrnamentGrouping(skeleton_one, skeleton_two, ornament_notes, chord_function)
+        groupings.append(ornament_grouping)
+
+    return groupings
 
 # here the ornament_groupings_dict is the dict where song followed by a list of lists 
 

@@ -51,14 +51,14 @@ class SecondLayerHMM:
 
         for grouping in ornament_groupings:
             for note in grouping:
-                note_type, note_interval = note
-                emission_count[note_type][note_interval] += 1
+                note_type, note_interval, note_duration = note
+                emission_count[note_type][(note_interval, note_duration)] += 1
 
         emission_probs = defaultdict(lambda: defaultdict(float))
         for emission_type in emission_count.keys():
             total_count = sum(emission_count[emission_type].values())
-            for interval, count in emission_count[emission_type].items():
-                emission_probs[emission_type][interval] = count / total_count
+            for (note_interval, note_duration), count in emission_count[emission_type].items():
+                emission_probs[emission_type][(note_interval, note_duration)] = count / total_count
 
         return emission_probs
 

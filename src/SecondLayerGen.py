@@ -6,7 +6,6 @@ class SecondLayerGen:
 
     def train_hmms(self, ornament_groupings_dict):
         trained_hmms = {}
-        print(f'all hmms required: {list(ornament_groupings_dict.keys())}')
         for offset_chordfunction, training_data in ornament_groupings_dict.items():
             try:
                 current_hmm = SecondLayerHMM()
@@ -19,6 +18,7 @@ class SecondLayerGen:
 
     def generate_sequence(self, skeleton_note_offset, chord_function):
         if (skeleton_note_offset, chord_function) not in self.hmms:
+            print(f'{skeleton_note_offset, chord_function} not found in self.hmms')
             return []
         
         hmm: SecondLayerHMM = self.hmms[(skeleton_note_offset, chord_function)]

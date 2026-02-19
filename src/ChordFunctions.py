@@ -1,3 +1,5 @@
+from ChordTiming import ChordTiming
+
 def calc_semitones_to_c(note: str):
     """
     Calculate the number of semitones needed to transpose a given note to C.
@@ -69,7 +71,29 @@ def transpose_note(note: str, semitones_to_shift: int):
 
     return pitch_class_to_note[shifted_pitch_class]
 
-def get_chord_root_and_type(chord: str):
+def get_key_root_and_type(key: str):
+    """
+    Extracts the root note and chord type from a key .
+
+    Args:
+        key (str): A chord string in the format "root:type" (e.g., "C:maj", "G:min").
+
+    Returns:
+        tuple: A tuple containing (key_root_note, key_type) where both are strings.
+
+    Raises:
+        ValueError: If the chord string is an invalid format.
+    """
+    parts = key.split(':')
+    if len(parts) >= 2:
+        key_root_note = parts[0]
+        key_type = parts[1]
+        return (key_root_note, key_type)
+    else: 
+        raise ValueError(f"Invalid key format: {key}")
+
+
+def get_chord_root_and_type(chord: ChordTiming):
     """
     Extracts the root note and chord type from a chord string.
 
@@ -82,7 +106,7 @@ def get_chord_root_and_type(chord: str):
     Raises:
         ValueError: If the chord string is an invalid format.
     """
-    parts = chord.split(':')
+    parts = chord.get_chord_name().split(':')
     if len(parts) >= 2:
         chord_root_note = parts[0]
         chord_type = parts[1]
@@ -90,7 +114,7 @@ def get_chord_root_and_type(chord: str):
     else: 
         raise ValueError(f"Invalid chord format: {chord}")
 
-def transpose_chord_to_c_major(chord, original_key):
+def transpose_chord_to_c_major(chord: ChordTiming, original_key):
     """
     Transpose a chord from its original key to C major.
 
@@ -168,7 +192,7 @@ def get_chord_name_in_original_key(roman_numeral: str, key: str):
         'B': 11
     }
 
-    (key_root_note, _) = get_chord_root_and_type(key)
+    (key_root_note, _) = get_key_root_and_type(key)
     key_root_note_number = note_to_pitch_class[key_root_note]
     scale_num_semitones = roman_numeral_to_semitones[roman_numeral]
     chord_pitch_class = (key_root_note_number + scale_num_semitones) % 12
@@ -271,49 +295,3 @@ def get_chord_tones(chord_name):
         return []
     
     return CHORD_TEMPLATES[chord_name]
-
-def is_chord_tone(note_pitch, chord_name):
-    """
-    Determines if a given note pitch is a chord tone of the specified chord.
-
-    Args:
-        note_pitch (int): The MIDI pitch number of the note to check.
-        chord_name (str): The name of the chord in the format 'Root:quality' 
-                         (e.g., 'C:maj', 'A:min', 'G:7').
-
-    Returns:
-        bool: True if the note pitch is a chord tone of the specified chord, 
-              False otherwise.
-
-    Raises:
-        ValueError: If the chord_name is not found in the CHORD_TEMPLATES dictionary.
-
-    Note:
-        The function uses pitch class (pitch % 12) to determine if a note belongs
-        to a chord, making it octave-invariant.
-    """
-    CHORD_TEMPLATES = {
-        'C:maj': [0, 4, 7],
-        'C:min': [0, 3, 7],
-        'D:min': [2, 5, 9],
-        'D:maj': [2, 6, 9],
-        'E:min': [4, 7, 11],
-        'E:maj': [4, 8, 11],
-        'F:maj': [5, 9, 0],
-        'F:min': [5, 8, 0],
-        'G:maj': [7, 11, 2],
-        'G:min': [7, 10, 2],
-        'A:min': [9, 0, 4],
-        'A:maj': [9, 1, 4],
-        'B:min': [11, 2, 6],
-        'B:maj': [11, 3, 6],
-        'B:dim': [11, 2, 5],
-        'G:7': [7, 11, 2, 5]
-    }
-
-    if chord_name not in CHORD_TEMPLATES:
-        raise ValueError(f"Invalid chord name: {chord_name} ")
-
-    pitch_class = note_pitch % 12
-
-    return pitch_class in CHORD_TEMPLATES[chord_name]
