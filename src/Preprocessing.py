@@ -7,13 +7,14 @@ from BeatTiming import BeatTiming
 from ChordTiming import ChordTiming
 from SongInfo import SongInfo
 from OrnamentGroupings import *
+from SongProcessedInfo import TrainingDataProcessedInfo
 from Helper import *
 import os
 
-def load_song_info(directory):
-    all_song_notes = {}
-    all_song_beat_chords = {}
-    all_song_groupings = {}
+def load_song_info(directory: str) -> TrainingDataProcessedInfo:
+    all_song_notes = []
+    all_song_beat_chords = []
+    all_song_ornament_groupings = []
 
     # Loop through all songs
     for song_dir in sorted(os.listdir(directory)):
@@ -41,24 +42,24 @@ def load_song_info(directory):
                     continue
 
                 groupings = get_ornament_groupings(song_info)
-                all_song_groupings[song_dir] = groupings
+                all_song_ornament_groupings.append(groupings)
 
                 # Process beat chords association
                 beats_chords = get_beats_matching_chords(song_info)
-                beats_chords_function = []
+                beats_chords_function_list = []
                 for matched_chord in beats_chords:
                     try:
                         if matched_chord is None:
-                            beats_chords_function.append('N')
+                            beats_chords_function_list.append('N')
                         elif matched_chord.get_chord_name() == 'N':
-                            beats_chords_function.append('N')
+                            beats_chords_function_list.append('N')
                         else:
                             transposed_chord = transpose_chord_to_c_major(matched_chord, song_info.song_key)
                             chord_function = convert_chord_name_to_roman_numeral(transposed_chord)
-                            beats_chords_function.append(chord_function)
+                            beats_chords_function_list.append(chord_function)
                     except Exception as e:
-                        beats_chords_function.append('N')
-                all_song_beat_chords[song_dir] = beats_chords_function
+                        beats_chords_function_list.append('N')
+                all_song_beat_chords.append(beats_chords_function_list)
 
                 # Process song notes
                 song_notes_filtered = []
@@ -75,7 +76,7 @@ def load_song_info(directory):
                     except Exception as e:
                         continue
 
-                all_song_notes[song_dir] = song_notes_filtered
+                all_song_notes.append(song_notes_filtered)
 
             except Exception as e:
                 print(f"Error{song_dir}: {e}")
@@ -83,7 +84,8 @@ def load_song_info(directory):
         else:
             print(f"Missing file for song {song_dir}")
 
-    return all_song_notes, all_song_beat_chords, all_song_groupings
+    training_data = TrainingDataProcessedInfo(all_song_notes, all_song_beat_chords, all_song_ornament_groupings)
+    return training_data
 
 def get_tempo_from_midi(midi):
     """
@@ -106,7 +108,6 @@ def ticks_to_seconds(ticks, ticks_per_beat, tempo_microseconds):
     return seconds
 
 def load_midi_notes(midi_path):
-
     midi = MidiFile(midi_path)
     ticks_per_beat = midi.ticks_per_beat
     tempo = get_tempo_from_midi(midi)
@@ -147,12 +148,10 @@ def load_midi_notes(midi_path):
     return notes
 
 def get_beats_matching_chords(song_info: SongInfo) -> list[ChordTiming | None]:
-    beat_timings = song_info.beat_timings
-    chord_timings = song_info.chord_timings
-
+    beat_timings: list[BeatTiming] = song_info.beat_timings
     beat_chords = []
     for beat in beat_timings:
-        matched_chord = get_matching_chord(beat.get_onset_time(), chord_timings)
+        matched_chord = beat.get_matching_chord(song_info)
         beat_chords.append(matched_chord)
 
     return beat_chords
@@ -268,37 +267,6 @@ def filter_empty_bars_no_chord(bars, bars_chords):
 
     return filtered_bars, filtered_bars_chords
 
-def create_chord_beat_onset_tuple_structure(bars, bars_chords):
-    length = min(len(bars), len(bars_chords))
-
-    chord_skeleton_notes_list = []
-    for i in range(length):
-        current_bar = bars[i]
-        current_chord = bars_chords[i]
-
-        beat_notes = {0.0: None, 1.0: None, 2.0: None, 3.0: None}
-
-        for note in current_bar:
-            beat_position = note[3]
-            if beat_position in beat_notes:
-                beat_notes[beat_position] = note[0]
-
-            # If bar is completely empty, skip
-            if all(v is None for v in beat_notes.values()):
-                continue
-
-            chord_skeleton_notes = (
-                current_chord,
-                beat_notes[0.0],
-                beat_notes[1.0],
-                beat_notes[2.0],
-                beat_notes[3.0]
-            )
-
-        chord_skeleton_notes_list.append(chord_skeleton_notes)
-
-    return chord_skeleton_notes_list
-
 def get_note_midi_pitch(chord_tone, chord_roman_numeral, key, octave_offset=0):
     chromatic_intervals_inverted = {
         "root": 0, "b2": 1, "2nd": 2, "b3": 3, "3rd": 4, "4th": 5,
@@ -355,7 +323,7 @@ def get_note_at_beat_timing(beat_timing, notes, threshold=0.05):
 
     return None
 
-def get_closest_note_at_time(target_time, notes: list[Note], threshold=0.4) -> Note | None:
+def get_closest_note_at_time(target_time, notes: list[TrainingNote], threshold=0.4) -> TrainingNote | None:
     notes = sorted(notes, key=lambda note: note.get_start_seconds())
     current_closest_diff = 1000000
     current_closest_note = None
@@ -385,17 +353,17 @@ def get_closest_note_at_time(target_time, notes: list[Note], threshold=0.4) -> N
 
     #return notes
 
-def get_ornaments(s1_onset, s2_onset, notes) -> list[Note]:
+def get_ornaments(note1: TrainingNote, note2: TrainingNote, notes: list[TrainingNote]) -> list[TrainingNote]:
     """
-        Given 2 skeleton notes onset times, gets all the notes in between them
+        Given 2 skeleton notes, gets all the notes in between them
     """
     # Given the onset in seconds of 2 notes, want to find all the notes that fall in between them  
     notes = sorted(notes, key=lambda note: note.get_start_seconds())
-    inbetween_notes = [note for note in notes if s1_onset < note.get_start_seconds() < s2_onset]
+    inbetween_notes = [note for note in notes if note1.get_start_seconds() < note.get_start_seconds() < note2.get_start_seconds()]
     return inbetween_notes
 
-def get_strong_beat_pairs(notes, beat_timings: list[BeatTiming]) -> list[tuple[Note, Note]]:
-    strong_bar_beats = [beat for beat in beat_timings if beat.is_strong_beat()]
+def get_strong_beat_pairs(notes, song_info: SongInfo) -> list[tuple[TrainingNote, TrainingNote]]:
+    strong_bar_beats = [beat for beat in song_info.beat_timings if beat.is_strong_beat()]
     strong_bar_beats = sorted(strong_bar_beats, key=lambda beat: beat.get_onset_time())
 
     pairs = []
@@ -462,14 +430,12 @@ def ornament_note_role(prev_note_pitch, target_note_pitch, next_note_pitch, chor
     else:
         return "other"
 
-def determine_chord_function(note: Note, chord_timings, song_key):
+def determine_chord_function(chord: ChordTiming | None, song_info: SongInfo):
     try:
-        chord = get_matching_chord(note, chord_timings)
-
         if chord is None or chord.get_chord_name() == 'N':
             return 'N'
         
-        transposed_chord = transpose_chord_to_c_major(chord, song_key)
+        transposed_chord = transpose_chord_to_c_major(chord, song_info.song_key)
         chord_function = convert_chord_name_to_roman_numeral(transposed_chord)
         return chord_function
     except Exception:
@@ -489,21 +455,20 @@ def get_ornament_groupings(song_info: SongInfo) -> list[OrnamentGrouping]:
     '''
     groupings = []
 
-    beat_timings = song_info.beat_timings
     chord_timings = song_info.chord_timings
     notes = song_info.notes
     song_key = song_info.song_key
 
-    strong_beat_pairs = get_strong_beat_pairs(notes, beat_timings)
+    strong_beat_pairs = get_strong_beat_pairs(notes, song_info)
     for skeleton_one, skeleton_two in strong_beat_pairs:
-        ornament_notes = get_ornaments(skeleton_one.get_start_seconds(), skeleton_two.get_start_seconds(), notes)
+        ornament_notes = get_ornaments(skeleton_one, skeleton_two, notes)
 
         # skip if no ornament notes between these 2 skeleton notes
         if len(ornament_notes) == 0:
             continue
 
-        chord = get_matching_chord(skeleton_two, chord_timings)
-        chord_function = determine_chord_function(skeleton_two, chord_timings, song_key)
+        chord = skeleton_one.get_chord(song_info)
+        chord_function = determine_chord_function(chord, song_info)
 
         if chord_function is None or chord_function == 'N':
             continue

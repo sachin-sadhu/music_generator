@@ -1,4 +1,5 @@
 from collections import defaultdict
+from OrnamentGroupings import *
 import numpy as np
 
 class SecondLayerHMM:
@@ -22,21 +23,18 @@ class SecondLayerHMM:
 
         return initial_probabilities
 
-    def calc_transition_matrix(self, ornament_groupings):
+    def calc_transition_matrix(self, ornament_groupings: list[OrnamentGrouping]):
         transition_count = defaultdict(lambda: defaultdict(int))
 
         for grouping in ornament_groupings:
-            if len(grouping) < 2: 
-                continue;
+            # No ornament notes
+            if len(grouping.ornament_notes) == 0:
+                continue
 
-            for i in range(len(grouping)-1):
-                curr_note = grouping[i]
-                curr_note_type = curr_note[0]
-
-                next_note = grouping[i+1]
-                next_note_type = next_note[0]
-
-                transition_count[curr_note_type][next_note_type] += 1 
+            for i in range(len(grouping.ornament_notes)-1):
+                curr_note_role = grouping.ornament_notes[i]
+                next_note_role = grouping.ornament_notes[i+1]
+                transition_count[curr_note_role][next_note_role] += 1
 
         transition_probs = defaultdict(lambda: defaultdict(float))
         for curr_type in transition_count.keys():
@@ -46,19 +44,18 @@ class SecondLayerHMM:
 
         return transition_probs
 
-    def calc_emission_matrix(self, ornament_groupings):
+    def calc_emission_matrix(self, ornament_groupings: list[OrnamentGrouping]):
         emission_count = defaultdict(lambda: defaultdict(int))
 
         for grouping in ornament_groupings:
-            for note in grouping:
-                note_type, note_interval, note_duration = note
-                emission_count[note_type][(note_interval, note_duration)] += 1
+            for note in grouping.ornament_notes:
+                emission_count[note.role][(note.offset, note.duration)] += 1
 
         emission_probs = defaultdict(lambda: defaultdict(float))
-        for emission_type in emission_count.keys():
-            total_count = sum(emission_count[emission_type].values())
-            for (note_interval, note_duration), count in emission_count[emission_type].items():
-                emission_probs[emission_type][(note_interval, note_duration)] = count / total_count
+        for role in emission_count.keys():
+            total_count = sum(emission_count[role].values())
+            for (offset, duration), count in emission_count[role].items():
+                emission_probs[role][(offset, duration)] = count / total_count
 
         return emission_probs
 

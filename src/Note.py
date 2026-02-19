@@ -12,13 +12,13 @@ class TrainingNote:
         self.start_seconds = start_seconds
 
         # Optional attributes
-        self.original_chord = None
         self.chord_function = None
         self.chord_tone = None
         self.octave_offset = None
 
-    def get_original_chord(self):
-        return self.get_original_chord
+    def get_chord(self, song_info):
+        chord_timings = song_info.chord_timings
+        return get_event_matching_chord(self.start_seconds, chord_timings)
 
     def get_midi_pitch(self):
         return self.midi_pitch
@@ -33,8 +33,6 @@ class TrainingNote:
         return self.start_seconds
 
     def set_original_chord(self, song_info):
-        chord_timings = song_info.chord_timings
-        self.original_chord = get_event_matching_chord(self.start_seconds, song_info.chord_timings)
 
     def set_chord_tone_octave_offset(self):
         """
