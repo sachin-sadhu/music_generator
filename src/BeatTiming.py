@@ -1,3 +1,6 @@
+from ChordTiming import *
+from Helper import get_event_matching_chord
+
 class BeatTiming:
     def __init__(self, beat_time, beat_strong_beat, beat_new_bar):
         self.beat_time = beat_time
@@ -12,3 +15,6 @@ class BeatTiming:
 
     def is_new_bar(self):
         return self.new_bar
+
+    def get_matching_chord(self, song_info):
+        return get_event_matching_chord(self.beat_time, song_info)

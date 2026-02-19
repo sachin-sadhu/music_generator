@@ -1,3 +1,6 @@
+from SongInfo import *
+from ChordTiming import *
+
 def quantise_beat_duration(beat_duration, grid_size=0.5, max_duration=4.0):
     """
     Quantise a beat duration to the nearest musical note value.
@@ -31,3 +34,11 @@ def quantise_beat_duration(beat_duration, grid_size=0.5, max_duration=4.0):
 
     closest = min(DURATION_BINS.keys(), key=lambda x: abs(x-quantised))
     return DURATION_BINS[closest]
+
+def get_event_matching_chord(onset_seconds, song_info: SongInfo) -> ChordTiming | None:
+    chord_timings = song_info.chord_timings
+
+    for chord in chord_timings:
+        if chord.get_chord_start() <= onset_seconds <= chord.get_chord_end():
+            return chord
+    return None

@@ -1,7 +1,9 @@
+from Helper import *
 from ChordFunctions import *
 from BeatTiming import BeatTiming
+from SongInfo import *
 
-class Note:
+class TrainingNote:
     def __init__(self, midi_pitch, clef, duration, start_seconds):
         self.midi_pitch = midi_pitch
         self.clef = clef
@@ -9,8 +11,20 @@ class Note:
         self.pitch_class = midi_pitch % 12
         self.start_seconds = start_seconds
 
+        # Optional attributes
+        self.original_chord = None
+        self.chord_function = None
+        self.chord_tone = None
+        self.octave_offset = None
+
+    def get_original_chord(self):
+        return self.get_original_chord
+
     def get_midi_pitch(self):
         return self.midi_pitch
+
+    def get_chord_function(self):
+        return self.chord_function
 
     def get_duration(self):
         return self.duration
@@ -18,7 +32,11 @@ class Note:
     def get_start_seconds(self):
         return self.start_seconds
 
-    def get_note_chord_tone(self, chord):
+    def set_original_chord(self, song_info):
+        chord_timings = song_info.chord_timings
+        self.original_chord = get_event_matching_chord(self.start_seconds, song_info.chord_timings)
+
+    def set_chord_tone_octave_offset(self):
         """
         Determines the relationship of a note to a given chord in terms of intervals and octave offset.
 
@@ -75,16 +93,16 @@ class Note:
         }
 
         try:
-            (chord_root_note, chord_type) = get_chord_root_and_type(chord)
+            (chord_root_note, _) = get_chord_root_and_type(self.original_chord)
             chord_root_midi_pitch = octave_4_note_midi_pitch_mapping[chord_root_note]
             semitone_offset = self.midi_pitch - chord_root_midi_pitch
             pitch_class_offset = semitone_offset % 12
-            octave_offset = semitone_offset // 12
-            chord_tone = chromatic_intervals[pitch_class_offset]
+            self.chord_tone = chromatic_intervals[pitch_class_offset]
+            self.octave_offset = semitone_offset // 12
         except Exception:
-            return ("root", 0)
+            self.chord_tone = 'root'
+            self.octave_offset = 0
 
-        return (chord_tone, octave_offset)
 
     def is_chord_triad(self, chord_name):
         """
@@ -135,3 +153,55 @@ class Note:
             if abs(beat.get_onset_time() - self.start_seconds) <= threshold:
                 return True
         return False
+
+    def set_chord_function(self, song_info: SongInfo):
+        if self.original_chord is None:
+            self.chord_function = None
+        else:
+            transposed_chord = transpose_chord_to_c_major(self.original_chord, song_info.song_key)
+            self.chord_function = convert_chord_name_to_roman_numeral(transposed_chord)
+
+class GeneratedNote:
+    def __init__(self, chord_tone, chord_function, octave_offset):
+        self.chord_tone = chord_tone
+        self.chord_function = chord_function
+        self.octave_offset = octave_offset
+
+    def get_note_midi_pitch(self, song_key):
+        chromatic_intervals_inverted = {
+            "root": 0, "b2": 1, "2nd": 2, "b3": 3, "3rd": 4, "4th": 5,
+            "b5": 6, "5th": 7, "b6": 8, "6th": 9, "b7": 10, "7th": 11, "octave": 12
+        }
+
+        chord_function_to_semitones = {
+            'I': 0,   # Tonic (0 semitones above root)
+            'ii': 2,  # 2 semitones above root
+            'iii': 4, # 4 semitones above root
+            'IV': 5,  # 5 semitones above root
+            'V': 7,   # 7 semitones above root ← We need this!
+            'vi': 9,  # 9 semitones above root
+            'vii': 11 # 11 semitones above root
+        }
+
+        note_to_pitch_class = {
+            'C': 0, 
+            'C#': 1, 'Db': 1,
+            'D': 2,
+            'D#': 3, 'Eb': 3,
+            'E': 4,
+            'F': 5,
+            'F#': 6, 'Gb': 6,
+            'G': 7,
+            'G#': 8, 'Ab': 8,
+            'A': 9,
+            'A#': 10, 'Bb': 10,
+            'B': 11
+        }
+
+        key_root_note, _ = get_key_root_and_type(song_key)
+        key_root_note_midi_pitch = 60 + note_to_pitch_class.get(key_root_note, 0)
+
+        chord_root_note_midi_pitch = key_root_note_midi_pitch + chord_function_to_semitones.get(self.chord_function, 0)
+        note_midi_value = chord_root_note_midi_pitch + chromatic_intervals_inverted.get(self.chord_tone, 0) + (self.octave_offset * 12)
+
+        return note_midi_value

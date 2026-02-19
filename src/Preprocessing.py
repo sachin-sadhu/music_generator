@@ -2,11 +2,12 @@ from mido import MidiFile, tick2second
 from ChordFunctions import *
 from collections import defaultdict
 from SecondLayerHMM import *
-from Note import Note
+from Note import *
 from BeatTiming import BeatTiming
 from ChordTiming import ChordTiming
 from SongInfo import SongInfo
 from OrnamentGroupings import *
+from Helper import *
 import os
 
 def load_song_info(directory):
@@ -39,12 +40,11 @@ def load_song_info(directory):
                 if get_chord_root_and_type(song_info.song_key)[1] == 'min':
                     continue
 
-                groupings = get_ornament_groupings(song_info.notes, song_info.beat_timings)
-                prepped_groupings = prep_groupings_for_second_layer(groupings, song_info.chord_timings, song_info.song_key)
-                all_song_groupings[song_dir] = prepped_groupings
+                groupings = get_ornament_groupings(song_info)
+                all_song_groupings[song_dir] = groupings
 
                 # Process beat chords association
-                beats_chords = get_beats_matching_chords(song_info.beat_timings, song_info.chord_timings)
+                beats_chords = get_beats_matching_chords(song_info)
                 beats_chords_function = []
                 for matched_chord in beats_chords:
                     try:
@@ -64,21 +64,15 @@ def load_song_info(directory):
                 song_notes_filtered = []
                 for note in song_info.notes:
                     try:
-                        note_cooresponding_chord = get_matching_chord(note, song_info.chord_timings)
-                        if note_cooresponding_chord is None or note_cooresponding_chord == 'N':
+                        note.set_original_chord(song_info.chord_timings)
+
+                        if note.get_original_chord() is None or note.get_original_chord() == 'N':
                             continue
 
-                        note_chord_tone = note.get_note_chord_tone(note_cooresponding_chord)
-                        transposed_chord = transpose_chord_to_c_major(note_cooresponding_chord, song_info.song_key)
-                        chord_function = convert_chord_name_to_roman_numeral(transposed_chord)
-
-                        # Add new attributes to note dict
-                        note['original_chord'] = note_cooresponding_chord
-                        note['note_chord_tone'] = note_chord_tone
-                        note['chord_function'] = chord_function
+                        note.set_chord_tone()
+                        note.set_chord_function(song_info)
                         song_notes_filtered.append(note)
                     except Exception as e:
-                        #print(f"Error {song_dir} skipping note: {e}")
                         continue
 
                 all_song_notes[song_dir] = song_notes_filtered
@@ -146,13 +140,16 @@ def load_midi_notes(midi_path):
                 note_duration = quantise_beat_duration(beat_duration)
                 clef = 'treble' if msg.note >= 60 else 'bass'
 
-                note = Note(msg.note, clef, note_duration, seconds_onset)
+                note = TrainingNote(msg.note, clef, note_duration, seconds_onset)
                 notes.append(note)
                 del active_notes[msg.note]
 
     return notes
 
-def get_beats_matching_chords(beat_timings: list[BeatTiming], chord_timings: list[ChordTiming]) -> list[ChordTiming | None]:
+def get_beats_matching_chords(song_info: SongInfo) -> list[ChordTiming | None]:
+    beat_timings = song_info.beat_timings
+    chord_timings = song_info.chord_timings
+
     beat_chords = []
     for beat in beat_timings:
         matched_chord = get_matching_chord(beat.get_onset_time(), chord_timings)
@@ -178,19 +175,7 @@ def split_beat_timings_to_bars(beat_timings):
 
     return bars
         
-
-"""
-    loop through file, when see a 1.0 in last column indicates new bar
-    continoulsy add until we see another 1.0
-"""
-
-def get_matching_chord(note: Note, chord_timings: list[ChordTiming]) -> ChordTiming | None:
-    for chord in chord_timings:
-        if chord.get_chord_start() <= note.get_start_seconds() <= chord.get_chord_end():
-            return chord
-    return None
     
-
 def calculate_beat_position(ticks_per_bar, ticks_per_beat, tick_onset):
     """
     Calculate the bar index and beat position within a bar for a given tick onset.
@@ -346,7 +331,7 @@ def get_note_midi_pitch(chord_tone, chord_roman_numeral, key, octave_offset=0):
     }
 
     # Get key information
-    key_root_note, key_type = get_chord_root_and_type(key)
+    key_root_note, key_type = get_key_root_and_type(key)
     key_root_note_midi_pitch = 60 + note_to_pitch_class.get(key_root_note, 0)
 
     # Calculate chord root
@@ -449,24 +434,6 @@ def get_strong_beat_pairs(notes, beat_timings: list[BeatTiming]) -> list[tuple[N
 
     #return pairs
 
-def get_ornament_groupings(notes, beat_timings) -> list[list[Note]]:
-    """
-        given the list of notes, groups them into skeleton notes and ornaments between those skeletons
-    """
-    # have in format [s1, ornament notes, s2]
-    groupings = []
-    strong_beat_pairs = get_strong_beat_pairs(notes, beat_timings)
-
-    for s1, s2 in strong_beat_pairs:
-        ornament_notes = get_ornaments(s1.get_start_seconds(), s2.get_start_seconds(), notes)
-        grouping = [s1]
-        for note in ornament_notes:
-            grouping.append(note)
-        grouping.append(s2)
-        groupings.append(grouping)
-
-    return groupings
-
 """ 
     given a list of ntoes, we want to define functions that 
     - for each ornament note, determine the interval from the previous note 
@@ -508,7 +475,7 @@ def determine_chord_function(note: Note, chord_timings, song_key):
     except Exception:
         return None
 
-def get_ornament_groupings(notes: list[Note], chord_timings, beat_timings, song_key) -> list[OrnamentGrouping]:
+def get_ornament_groupings(song_info: SongInfo) -> list[OrnamentGrouping]:
     '''
         want a note to be in the format note:{
                                                 'role': 'blah',
@@ -521,6 +488,11 @@ def get_ornament_groupings(notes: list[Note], chord_timings, beat_timings, song_
         want list to be in the format [(s1, s2), [ornament_notes], chord_function]
     '''
     groupings = []
+
+    beat_timings = song_info.beat_timings
+    chord_timings = song_info.chord_timings
+    notes = song_info.notes
+    song_key = song_info.song_key
 
     strong_beat_pairs = get_strong_beat_pairs(notes, beat_timings)
     for skeleton_one, skeleton_two in strong_beat_pairs:
