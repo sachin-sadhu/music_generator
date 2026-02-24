@@ -4,8 +4,8 @@ import numpy as np
 
 class OrnamentNoteHMMs:
     def __init__(self, ornament_groupings: list[OrnamentGrouping]):
-        
-        
+        self.offset_function_training_data_mapping = self.split_song_ornaments(ornament_groupings)
+        self.hmms = {}
 
     def split_song_ornaments(self, ornament_groupings: list[OrnamentGrouping]):
         offset_function_dict = defaultdict(list)
@@ -13,11 +13,27 @@ class OrnamentNoteHMMs:
         for grouping in ornament_groupings:
             note_offset = grouping.get_group_note_interval()
             chord_function = grouping.chord_function
-            ornament_notes = grouping.ornament_notes
 
-            offset_function_dict[(note_offset, chord_function)].append(ornament_notes)
+            offset_function_dict[(note_offset, chord_function)].append(grouping)
 
-class SecondLayerHMM:
+        return offset_function_dict
+
+    def train_hmms(self):
+        for offset_chord_function, training_data in self.offset_function_training_data_mapping.items():
+            hmm = OrnamentHMM()
+            hmm.train_model(training_data)
+            self.hmms[offset_chord_function] = hmm
+
+    def generate_sequence(self, offset, chord_function):
+        if (offset, chord_function) not in self.hmms:
+            print(f'{offset, chord_function} not found in self.hmms')
+            return []
+
+        hmm = self.hmms[(offset, chord_function)]
+        _, sampled_sequence = hmm.sample(1)
+        return sampled_sequence
+
+class OrnamentHMM:
     def __init__(self):
         self.transition_matrix = {}
         self.emission_matrix = {}
@@ -25,7 +41,6 @@ class SecondLayerHMM:
 
     def calc_initial_probabilities(self):
         initial_probabilities = {}
-        print(f'hidden states: {self.transition_matrix.keys()}')
         hidden_states = list(self.transition_matrix.keys())
 
         if len(hidden_states) == 0:
@@ -47,8 +62,8 @@ class SecondLayerHMM:
                 continue
 
             for i in range(len(grouping.ornament_notes)-1):
-                curr_note_role = grouping.ornament_notes[i]
-                next_note_role = grouping.ornament_notes[i+1]
+                curr_note_role = grouping.ornament_notes[i].role
+                next_note_role = grouping.ornament_notes[i+1].role
                 transition_count[curr_note_role][next_note_role] += 1
 
         transition_probs = defaultdict(lambda: defaultdict(float))
@@ -97,7 +112,7 @@ class SecondLayerHMM:
         probs = list(self.initial_probabilities.values())
         return hidden_states[np.random.choice(len(hidden_states), p=probs)]
 
-    def train_model(self, ornament_groupings):
+    def train_model(self, ornament_groupings: list[OrnamentGrouping]):
         try:
             self.transition_matrix = self.calc_transition_matrix(ornament_groupings)
             self.emission_matrix = self.calc_emission_matrix(ornament_groupings)

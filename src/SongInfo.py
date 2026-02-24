@@ -113,9 +113,9 @@ class SongInfo:
 
 class TrainingDataProcessedInfo:
     def __init__(self):
-        self.notes = []
-        self.beat_chords = []
-        self.ornament_groupings = []
+        self.notes: list[TrainingNote] = []
+        self.beat_chords: list[list[str]] = []
+        self.ornament_groupings: list[OrnamentGrouping] = []
 
     def load_training_data(self, directory: str) -> None:
         all_song_notes = []
@@ -146,8 +146,8 @@ class TrainingDataProcessedInfo:
                     if song_info.song_key.get_type() == 'min':
                         continue
 
-                    groupings = self.get_ornament_groupings(song_info)
-                    all_song_ornament_groupings.append(groupings)
+                    groupings = self.create_ornament_groupings(song_info)
+                    all_song_ornament_groupings.extend(groupings)
 
                     # Process beat chords association
                     beats_chords_function_list = []
@@ -163,8 +163,8 @@ class TrainingDataProcessedInfo:
                         except Exception:
                             beats_chords_function_list.append('N')
 
-                    all_song_beat_chords.append(beats_chords_function_list)
                     all_song_notes.append(song_info.notes)
+                    all_song_notes.extend(song_info.notes)
 
                 except Exception as e:
                     print(f"Error{song_dir}: {e}")
@@ -176,7 +176,7 @@ class TrainingDataProcessedInfo:
         self.beat_chords = all_song_beat_chords
         self.ornament_groupings = all_song_ornament_groupings
 
-    def get_ornament_groupings(self, song_info: SongInfo) -> list[OrnamentGrouping]:
+    def create_ornament_groupings(self, song_info: SongInfo) -> list[OrnamentGrouping]:
         '''
             want a note to be in the format note:{
                                                     'role': 'blah',
@@ -193,9 +193,9 @@ class TrainingDataProcessedInfo:
         notes = song_info.notes
         song_key = song_info.song_key
 
-        strong_beat_pairs = self.get_strong_beat_pairs(notes, song_info)
+        strong_beat_pairs = self.group_strong_beat_pairs(notes, song_info)
         for skeleton_one, skeleton_two in strong_beat_pairs:
-            ornament_notes = self.get_ornaments(skeleton_one, skeleton_two, notes)
+            ornament_notes = self.find_ornament_notes(skeleton_one, skeleton_two, notes)
 
             # skip if no ornament notes between these 2 skeleton notes
             if len(ornament_notes) == 0:
@@ -253,7 +253,7 @@ class TrainingDataProcessedInfo:
         else:
             return "other"
 
-    def get_ornaments(self, note1: TrainingNote, note2: TrainingNote, notes: list[TrainingNote]) -> list[TrainingNote]:
+    def find_ornament_notes(self, note1: TrainingNote, note2: TrainingNote, notes: list[TrainingNote]) -> list[TrainingNote]:
         """
             Given 2 skeleton notes, gets all the notes in between them
         """
@@ -262,7 +262,7 @@ class TrainingDataProcessedInfo:
         inbetween_notes = [note for note in notes if note1.get_start_seconds() < note.get_start_seconds() < note2.get_start_seconds()]
         return inbetween_notes
 
-    def get_strong_beat_pairs(self, notes, song_info: SongInfo) -> list[tuple[TrainingNote, TrainingNote]]:
+    def group_strong_beat_pairs(self, notes, song_info: SongInfo) -> list[tuple[TrainingNote, TrainingNote]]:
         strong_bar_beats = [beat for beat in song_info.beat_timings if beat.is_strong_beat()]
         strong_bar_beats = sorted(strong_bar_beats, key=lambda beat: beat.get_onset_time())
 

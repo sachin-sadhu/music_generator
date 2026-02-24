@@ -3,7 +3,6 @@ from mido import MidiFile, MidiTrack, Message
 from Preprocessing import *
 from ChordFunctions import *
 from HMM import HMM
-from SecondLayerGen import *
 
 def save_to_midi(notes, output_path='output.mid', tempo=500000, ticks_per_beat=480):
     """
@@ -92,26 +91,26 @@ def save_to_midi(notes, output_path='output.mid', tempo=500000, ticks_per_beat=4
 
     mid.save(output_path)
 
-def fill_ornament_notes(skeleton_notes, ornament_generator: SecondLayerGen):
-    ### skeelton notes should be in format (midi_pitch, duration, chord_function) 
-    full_sequence = []
-    for i in range(len(skeleton_notes)-1):
-        note_1_pitch = skeleton_notes[i][0]
-        note_2_pitch = skeleton_notes[i+1][0]
-        offset = note_1_pitch - note_2_pitch
-        chord_function = skeleton_notes[i][-1]
+#def fill_ornament_notes(skeleton_notes, ornament_generator: SecondLayerGen):
+    #### skeelton notes should be in format (midi_pitch, duration, chord_function) 
+    #full_sequence = []
+    #for i in range(len(skeleton_notes)-1):
+        #note_1_pitch = skeleton_notes[i][0]
+        #note_2_pitch = skeleton_notes[i+1][0]
+        #offset = note_1_pitch - note_2_pitch
+        #chord_function = skeleton_notes[i][-1]
 
-        ornament_notes = ornament_generator.generate_sequence(offset, chord_function)
-        full_sequence.append(note_1_pitch)
+        #ornament_notes = ornament_generator.generate_sequence(offset, chord_function)
+        #full_sequence.append(note_1_pitch)
 
-        for ornament_note in ornament_notes:
-            print('yeet')
-            note_midi = full_sequence[-1] + ornament_note
-            full_sequence.append(note_midi)
+        #for ornament_note in ornament_notes:
+            #print('yeet')
+            #note_midi = full_sequence[-1] + ornament_note
+            #full_sequence.append(note_midi)
 
-    final_note_pitch = skeleton_notes[-1][0]
-    full_sequence.append(final_note_pitch)
-    return full_sequence
+    #final_note_pitch = skeleton_notes[-1][0]
+    #full_sequence.append(final_note_pitch)
+    #return full_sequence
 
 def fill_chord_triad(notes, key):
     CHORD_TEMPLATES = {
@@ -154,10 +153,14 @@ def fill_chord_triad(notes, key):
     save_to_midi(chord_tones, 'doon.mid')
 
 if __name__ == "__main__":
-    directory = "/cs/home/slzys1/Documents/music_generator/short_test_data/"
+    directory = "/home/sachin/Documents/music_generator/short_test_data/"
     data = TrainingDataProcessedInfo()
     data.load_training_data(directory)
-    split = split_song_ornaments(groupings)
+    
+    ornament_hmms = OrnamentNoteHMMs(data.ornament_groupings)
+    ornament_hmms.train_hmms()
+    print(ornament_hmms.hmms[(-2, 'IV')].emission_matrix)
+
     #print(split)
 
     #chord_beat_hmm = HMM()
