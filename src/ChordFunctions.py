@@ -1,4 +1,15 @@
-from ChordTiming import ChordTiming
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from Timings import ChordTiming, KeyTiming
+
+def get_event_matching_chord(onset_seconds, chord_timings: list[ChordTiming]) -> ChordTiming:
+    for chord in chord_timings:
+        if chord.get_chord_start() <= onset_seconds <= chord.get_chord_end():
+            return chord
+    raise ValueError("No matching chord found.")
 
 def calc_semitones_to_c(note: str):
     """
@@ -92,29 +103,7 @@ def get_key_root_and_type(key: str):
     else: 
         raise ValueError(f"Invalid key format: {key}")
 
-
-def get_chord_root_and_type(chord: ChordTiming):
-    """
-    Extracts the root note and chord type from a chord string.
-
-    Args:
-        chord (str): A chord string in the format "root:type" (e.g., "C:maj", "G:min").
-
-    Returns:
-        tuple: A tuple containing (chord_root_note, chord_type) where both are strings.
-
-    Raises:
-        ValueError: If the chord string is an invalid format.
-    """
-    parts = chord.get_chord_name().split(':')
-    if len(parts) >= 2:
-        chord_root_note = parts[0]
-        chord_type = parts[1]
-        return (chord_root_note, chord_type)
-    else: 
-        raise ValueError(f"Invalid chord format: {chord}")
-
-def transpose_chord_to_c_major(chord: ChordTiming, original_key):
+def transpose_chord_to_c_major(chord: ChordTiming, song_key: KeyTiming):
     """
     Transpose a chord from its original key to C major.
 
@@ -134,10 +123,11 @@ def transpose_chord_to_c_major(chord: ChordTiming, original_key):
              (e.g., "C:maj", "A:min").
     """
     try:
-        original_key = original_key.split(':')[0]
-        num_semitones_to_shift = calc_semitones_to_c(original_key)
+        key_root_note = song_key.get_root_note()
+        num_semitones_to_shift = calc_semitones_to_c(key_root_note)
 
-        (chord_root_note, chord_type) = get_chord_root_and_type(chord)
+        chord_root_note = chord.get_root_note()
+        chord_type = chord.get_type()
         transposed_chord_root_note = transpose_note(chord_root_note, num_semitones_to_shift)
         transposed_chord = f'{transposed_chord_root_note}:{chord_type}'
     except Exception as e:
@@ -271,7 +261,7 @@ def convert_chord_name_to_roman_numeral(chord_name: str):
 
     return root_to_degree[root_note]
 
-def get_chord_tones(chord_name):
+def get_chord_tones(chord: ChordTiming):
     CHORD_TEMPLATES = {
         'C:maj': [0, 4, 7],
         'C:min': [0, 3, 7],
@@ -290,6 +280,8 @@ def get_chord_tones(chord_name):
         'B:dim': [11, 2, 5],
         'G:7': [7, 11, 2, 5]
     }
+
+    chord_name = chord.get_name()
 
     if chord_name not in CHORD_TEMPLATES:
         return []

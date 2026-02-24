@@ -2,8 +2,6 @@ import mido
 from mido import MidiFile, MidiTrack, Message
 from Preprocessing import *
 from ChordFunctions import *
-from ChordTraining import *
-from NoteEmission import initalise_tmat, get_note_midi_pitch
 from HMM import HMM
 from SecondLayerGen import *
 
@@ -156,16 +154,17 @@ def fill_chord_triad(notes, key):
     save_to_midi(chord_tones, 'doon.mid')
 
 if __name__ == "__main__":
-    directory = "/home/sachin/Documents/music_generator/short_test_data/"
-    song_notes, all_song_beat_chords, groupings = load_song_info(directory)
+    directory = "/cs/home/slzys1/Documents/music_generator/short_test_data/"
+    data = TrainingDataProcessedInfo()
+    data.load_training_data(directory)
     split = split_song_ornaments(groupings)
-    print(split)
+    #print(split)
 
-    chord_beat_hmm = HMM()
-    chord_beat_hmm.train_model(song_notes, all_song_beat_chords)
-    sampled_beats = chord_beat_hmm.sample(5)
+    #chord_beat_hmm = HMM()
+    #chord_beat_hmm.train_model(song_notes, all_song_beat_chords)
+    #sampled_beats = chord_beat_hmm.sample(5)
 
-    sampled_beats = [(get_note_midi_pitch(note[0], note[-1], 'C:maj', note[1]), note[-1]) for note in sampled_beats]
+    #sampled_beats = [(get_note_midi_pitch(note[0], note[-1], 'C:maj', note[1]), note[-1]) for note in sampled_beats]
     #fill_chord_triad(sampled_beats, 'C:maj')
     #second_layer = SecondLayerGen()
     #second_layer.train_hmms(split)

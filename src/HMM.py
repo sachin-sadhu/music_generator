@@ -1,17 +1,21 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from Note import TrainingNote
+
 from collections import defaultdict
 import numpy as np
 import pickle
 import os
 
 class HMM:
-    """
-        takes in a list of notes, filter such that we only have notes that occur on beats
-    """
     def __init__(self):
-        self.transition_matrix = None
-        self.duration_matrix = None
-        self.emission_matrix = None
-        self.initial_probabilities = None
+        self.transition_matrix = {}
+        self.duration_matrix = {}
+        self.emission_matrix = {}
+        self.initial_probabilities = {}
 
     def save_model(self, filepath="models/hmm.pkl"):
         transition_probs = {}
@@ -111,16 +115,16 @@ class HMM:
         return duration_probs
 
     # Want a matrix that contains chord function transition probabilities
-    def calc_hidden_state_transition_matrix(self, beat_chords_dict):
+    def calc_hidden_state_transition_matrix(self, beat_chords_list: list[list[str]]):
         """
             looks like 'I': {'II': 0.05, 'IV': 0.03}, 'II': {'I':0.01}
         """
         transition_count = defaultdict(lambda: defaultdict(int))
 
-        for _, chord_sequence in beat_chords_dict.items():
-            for i in range(len(chord_sequence)-1):
-                curr_chord = chord_sequence[i]
-                next_chord = chord_sequence[i+1]
+        for curr_chord_sequence in beat_chords_list:
+            for i in range(len(curr_chord_sequence)-1):
+                curr_chord = curr_chord_sequence[i]
+                next_chord = curr_chord_sequence[i+1]
 
                 if curr_chord == 'N' or next_chord == 'N' or next_chord == curr_chord: 
                     continue
@@ -135,18 +139,18 @@ class HMM:
 
         return transition_probs
 
-    def calc_emission_state_transition_matrix(self, song_notes_dict):
+    def calc_emission_state_transition_matrix(self, notes_list: list[list[TrainingNote]]):
         """
             want it to be like {'IV': {root: 0.03}}
         """
         emission_count = defaultdict(lambda: defaultdict(int))
 
-        for _, note_sequence in song_notes_dict.items():
-            for i in range(len(note_sequence)-1):
-                curr_chord = note_sequence[i]['chord_function']
-                note_chord_tone = note_sequence[i]['note_chord_tone']
+        for curr_note_sequence in notes_list:
+            for i in range(len(curr_note_sequence)-1):
+                chord_function = curr_note_sequence[i].get_chord_function()
+                note_chord_tone = curr_note_sequence[i].get_chord_tone()
 
-                emission_count[curr_chord][note_chord_tone] += 1
+                emission_count[chord_function][note_chord_tone] += 1
 
         emission_probs = defaultdict(lambda: defaultdict(float))
         for chord_function in emission_count.keys():

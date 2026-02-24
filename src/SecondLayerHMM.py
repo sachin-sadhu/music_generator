@@ -1,12 +1,27 @@
 from collections import defaultdict
-from OrnamentGroupings import *
+from Note import OrnamentGrouping
 import numpy as np
+
+class OrnamentNoteHMMs:
+    def __init__(self, ornament_groupings: list[OrnamentGrouping]):
+        
+        
+
+    def split_song_ornaments(self, ornament_groupings: list[OrnamentGrouping]):
+        offset_function_dict = defaultdict(list)
+
+        for grouping in ornament_groupings:
+            note_offset = grouping.get_group_note_interval()
+            chord_function = grouping.chord_function
+            ornament_notes = grouping.ornament_notes
+
+            offset_function_dict[(note_offset, chord_function)].append(ornament_notes)
 
 class SecondLayerHMM:
     def __init__(self):
-        self.transition_matrix = None
-        self.emission_matrix = None
-        self.initial_probabilities = None
+        self.transition_matrix = {}
+        self.emission_matrix = {}
+        self.initial_probabilities = {}
 
     def calc_initial_probabilities(self):
         initial_probabilities = {}
