@@ -1,19 +1,12 @@
-import mido
-from mido import MidiFile, MidiTrack, Message
+from music21 import stream, note, tempo
 from Preprocessing import *
 from ChordFunctions import *
 from HMM import HMM
+from SecondLayerHMM import Generator
+from Timings import KeyTiming
 
-def save_to_midi(notes, output_path='output.mid', tempo=500000, ticks_per_beat=480):
-    """
-    Save notes to MIDI file.
-    
-    Args:
-        notes: List of tuples (pitch, duration, bar_position)
-               - pitch: MIDI pitch (0-127)
-               - duration: duration name (e.g., 'crotchet', 'quaver') 
-               - bar_position: position within bar (0-3 for 4/4 time)
-    """
+def notes_to_midi(notes, filename='output.mid', bpm=120):
+
     duration_to_beats_map = {
         'semiquaver': 0.25,
         'quaver': 0.50,
@@ -24,93 +17,19 @@ def save_to_midi(notes, output_path='output.mid', tempo=500000, ticks_per_beat=4
         'dotted_minim': 3,
         'semibreve': 4
     }
-
-    mid = MidiFile(ticks_per_beat=ticks_per_beat)
-    track = MidiTrack()
-    mid.tracks.append(track)
-
-    track.append(mido.MetaMessage('set_tempo', tempo=tempo))
-
-    # Group notes by their absolute time position
-    time_groups = {}
-    current_bar = 0
-    last_max_position = -1
+    """Convert list of (pitch, duration) to MIDI."""
+    s = stream.Stream()
+    s.append(tempo.MetronomeMark(number=bpm))
     
-    for note in notes:
-        note_pitch, note_duration, bar_position = note
-        
-        # Detect new bar when bar_position cycles back or decreases after reaching a higher value
-        if bar_position == 0 and last_max_position >= 2:
-            current_bar += 1
-        
-        last_max_position = max(last_max_position, bar_position)
-        if bar_position == 0:
-            last_max_position = 0
-            
-        # Calculate absolute beat position
-        absolute_beats = (current_bar * 4) + bar_position  # 4 beats per bar
-        
-        if absolute_beats not in time_groups:
-            time_groups[absolute_beats] = []
-        
-        time_groups[absolute_beats].append((note_pitch, note_duration))
+    for curr_note in notes:
+        pitch = curr_note.midi_pitch
+        n = note.Note(pitch)
+
+        duration = duration_to_beats_map.get(curr_note.duration, 1.0)
+        n.quarterLength = duration  # Duration in quarter notes
+        s.append(n)
     
-    # Create MIDI events
-    note_events = []
-    
-    for absolute_beats, note_group in time_groups.items():
-        onset_ticks = int(ticks_per_beat * absolute_beats)
-        
-        for note_pitch, note_duration in note_group:
-            # Calculate duration
-            duration_beats = duration_to_beats_map.get(note_duration, 1.0)
-            duration_ticks = int(ticks_per_beat * duration_beats)
-
-            # Store note_on and note_off events
-            note_events.append(('note_on', onset_ticks, note_pitch))
-            note_events.append(('note_off', onset_ticks + duration_ticks, note_pitch))
-
-    # Sort all events by time, then by event type (note_off before note_on for same time)
-    note_events.sort(key=lambda x: (x[1], x[0] == 'note_on'))
-    
-    # Write events with correct delta times
-    current_tick = 0
-    for event_type, event_tick, note_pitch in note_events:
-        delta_time = event_tick - current_tick
-        
-        if delta_time < 0:
-            print(f"Warning: negative delta time {delta_time}, setting to 0")
-            delta_time = 0
-        
-        if event_type == 'note_on':
-            track.append(Message('note_on', note=note_pitch, velocity=64, time=delta_time))
-        else:
-            track.append(Message('note_off', note=note_pitch, velocity=64, time=delta_time))
-        
-        current_tick = event_tick
-
-    mid.save(output_path)
-
-#def fill_ornament_notes(skeleton_notes, ornament_generator: SecondLayerGen):
-    #### skeelton notes should be in format (midi_pitch, duration, chord_function) 
-    #full_sequence = []
-    #for i in range(len(skeleton_notes)-1):
-        #note_1_pitch = skeleton_notes[i][0]
-        #note_2_pitch = skeleton_notes[i+1][0]
-        #offset = note_1_pitch - note_2_pitch
-        #chord_function = skeleton_notes[i][-1]
-
-        #ornament_notes = ornament_generator.generate_sequence(offset, chord_function)
-        #full_sequence.append(note_1_pitch)
-
-        #for ornament_note in ornament_notes:
-            #print('yeet')
-            #note_midi = full_sequence[-1] + ornament_note
-            #full_sequence.append(note_midi)
-
-    #final_note_pitch = skeleton_notes[-1][0]
-    #full_sequence.append(final_note_pitch)
-    #return full_sequence
+    s.write('midi', fp=filename)
 
 def fill_chord_triad(notes, key):
     CHORD_TEMPLATES = {
@@ -150,16 +69,34 @@ def fill_chord_triad(notes, key):
 
     print(chord_tones)
 
-    save_to_midi(chord_tones, 'doon.mid')
-
 if __name__ == "__main__":
-    directory = "/home/sachin/Documents/music_generator/short_test_data/"
+    directory = "/cs/home/slzys1/Documents/music_generator/test_data/"
     data = TrainingDataProcessedInfo()
     data.load_training_data(directory)
-    
+
+    chord_beat_hmm = HMM()
+    chord_beat_hmm.train_model(data.notes, data.beat_chords)
+
     ornament_hmms = OrnamentNoteHMMs(data.ornament_groupings)
     ornament_hmms.train_hmms()
-    print(ornament_hmms.hmms[(-2, 'IV')].emission_matrix)
+
+    song = Generator(chord_beat_hmm, ornament_hmms)
+    key = KeyTiming('C:maj')
+    sequence = song.generate(key)
+    print(sequence)
+
+    notes_to_midi(sequence)
+    
+    
+    #converted_notes = []
+    #beat_counter = 0
+    #for count, note in enumerate(sequence):
+        #beat_onset = count % 4
+        #converted_notes.append((note, 'crotchet', beat_onset))
+        #beat_counter += 1
+
+    #print(converted_notes)
+    #save_to_midi(converted_notes, "tone.mid")
 
     #print(split)
 

@@ -4,11 +4,63 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from Note import TrainingNote
+    from Timings import KeyTiming
 
 from collections import defaultdict
 import numpy as np
 import pickle
 import os
+
+class SkeletonEmission:
+    def __init__(self, note_chord_tone, octave_offset, chord_function):
+        self.note_chord_tone = note_chord_tone
+        self.octave_offset = octave_offset
+        self.chord_function = chord_function
+
+    def calc_midi_pitch(self, key: KeyTiming):
+        chromatic_intervals_inverted = {
+            "root": 0, "b2": 1, "2nd": 2, "b3": 3, "3rd": 4, "4th": 5,
+            "b5": 6, "5th": 7, "b6": 8, "6th": 9, "b7": 10, "7th": 11, "octave": 12
+        }
+
+        roman_numeral_to_semitones = {
+            'I': 0,   # Tonic (0 semitones above root)
+            'ii': 2,  # 2 semitones above root
+            'iii': 4, # 4 semitones above root
+            'IV': 5,  # 5 semitones above root
+            'V': 7,   # 7 semitones above root ← We need this!
+            'vi': 9,  # 9 semitones above root
+            'vii': 11 # 11 semitones above root
+        }
+
+        note_to_pitch_class = {
+            'C': 0, 
+            'C#': 1, 'Db': 1,
+            'D': 2,
+            'D#': 3, 'Eb': 3,
+            'E': 4,
+            'F': 5,
+            'F#': 6, 'Gb': 6,
+            'G': 7,
+            'G#': 8, 'Ab': 8,
+            'A': 9,
+            'A#': 10, 'Bb': 10,
+            'B': 11
+        }
+
+        # Get key information
+        key_root_note = key.get_root_note()
+        key_root_note_midi_pitch = 60 + note_to_pitch_class.get(key_root_note, 0)
+
+        # Calculate chord root
+        chord_root_note_midi_pitch = key_root_note_midi_pitch + roman_numeral_to_semitones.get(self.chord_function, 0)
+
+        # Calculate final note pitch
+        note_midi_pitch = chord_root_note_midi_pitch + chromatic_intervals_inverted.get(self.note_chord_tone, 0) + (self.octave_offset * 12)
+
+        #print(f"for chord type: {chord_roman_numeral}. for chord_tone: {chord_tone}. for key: {key}. generated_midi_pitch: {note_midi_pitch}")
+
+        return note_midi_pitch
 
 class HMM:
     def __init__(self):
@@ -122,14 +174,17 @@ class HMM:
         transition_count = defaultdict(lambda: defaultdict(int))
 
         for curr_chord_sequence in beat_chords_list:
-            for i in range(len(curr_chord_sequence)-1):
-                curr_chord = curr_chord_sequence[i]
-                next_chord = curr_chord_sequence[i+1]
 
-                if curr_chord == 'N' or next_chord == 'N' or next_chord == curr_chord: 
+            collapsed_chord_sequence = self.collapse_chord_sequence(curr_chord_sequence)
+            for i in range(len(collapsed_chord_sequence)-2):
+                first_chord = collapsed_chord_sequence[i]
+                second_chord = collapsed_chord_sequence[i+1]
+                third_chord = collapsed_chord_sequence[i+2]
+
+                if first_chord == 'N' or second_chord == 'N' or third_chord == 'N': 
                     continue
 
-                transition_count[curr_chord][next_chord] += 1
+                transition_count[(first_chord, second_chord)][third_chord] += 1
 
         transition_probs = defaultdict(lambda: defaultdict(float))
         for curr_chord in transition_count.keys():
@@ -139,18 +194,17 @@ class HMM:
 
         return transition_probs
 
-    def calc_emission_state_transition_matrix(self, notes_list: list[list[TrainingNote]]):
+    def calc_emission_state_transition_matrix(self, notes: list[TrainingNote]):
         """
             want it to be like {'IV': {root: 0.03}}
         """
         emission_count = defaultdict(lambda: defaultdict(int))
 
-        for curr_note_sequence in notes_list:
-            for i in range(len(curr_note_sequence)-1):
-                chord_function = curr_note_sequence[i].get_chord_function()
-                note_chord_tone = curr_note_sequence[i].get_chord_tone()
+        for i in range(len(notes)):
+            chord_function = notes[i].get_chord_function()
+            note_chord_tone = notes[i].get_chord_tone()
 
-                emission_count[chord_function][note_chord_tone] += 1
+            emission_count[chord_function][note_chord_tone] += 1
 
         emission_probs = defaultdict(lambda: defaultdict(float))
         for chord_function in emission_count.keys():
@@ -181,12 +235,12 @@ class HMM:
 
         return duration_beats[np.random.choice(len(duration_beats), p=duration_probs)]
 
-    def sample_next_hidden_state(self, current_hidden_state):
-        if current_hidden_state not in self.transition_matrix:
+    def sample_next_hidden_state(self, prev_chord, curr_chord):
+        if (prev_chord, curr_chord) not in self.transition_matrix:
             raise ValueError("Invalid hidden state")
 
-        next_hidden_states = list(self.transition_matrix[current_hidden_state].keys())
-        next_hidden_probs = list(self.transition_matrix[current_hidden_state].values())
+        next_hidden_states = list(self.transition_matrix[(prev_chord, curr_chord)].keys())
+        next_hidden_probs = list(self.transition_matrix[(prev_chord, curr_chord)].values())
 
         return next_hidden_states[np.random.choice(len(next_hidden_states), p=next_hidden_probs)]
 
@@ -195,12 +249,12 @@ class HMM:
         self.duration_matrix = self.calc_hidden_state_duration_matrix(beat_chords_dict)
         self.emission_matrix = self.calc_emission_state_transition_matrix(song_notes_dict)
 
-    def sample(self, num_samples=10):
+    def generate(self, num_samples=10):
         def sample_beats(hidden_state, num_beats):
             beats = []
             for _ in range(num_beats):
-                chord_tone, octave_offset = self.sample_emission(hidden_state)
-                beats.append((chord_tone, octave_offset, hidden_state))
+                chord_tone = self.sample_emission(hidden_state)
+                beats.append(SkeletonEmission(chord_tone, 0, hidden_state))
 
             return beats
 
@@ -214,19 +268,30 @@ class HMM:
         #current_emission = self.sample_emission(current_state)
 
         # Force first state to be 'I'
-        current_state = 'I'
-        current_state_duration = self.sample_hidden_state_duration(current_state)
+        prev_prev_state = 'I'
+        print('I')
+        current_state_duration = self.sample_hidden_state_duration(prev_prev_state)
+        sampled_chord_function_beat_duration.append((prev_prev_state, current_state_duration))
+        sampled_beats.extend(sample_beats(prev_prev_state, current_state_duration))
 
-        sampled_chord_function_beat_duration.append((current_state, current_state_duration))
-        sampled_beats.extend(sample_beats(current_state, current_state_duration))
+        prev_state = 'V'
+        print('V')
+        current_state_duration = self.sample_hidden_state_duration(prev_state)
+        sampled_chord_function_beat_duration.append((prev_state, current_state_duration))
+        sampled_beats.extend(sample_beats(prev_state, current_state_duration))
 
         while len(sampled_chord_function_beat_duration) < num_samples:
             # Sample next hidden state and emission.
-            current_state = self.sample_next_hidden_state(current_state)
+            current_state = self.sample_next_hidden_state(prev_prev_state, prev_state)
+
+            print(f'current chord: {current_state}')
             current_state_duration = self.sample_hidden_state_duration(current_state)
 
             sampled_chord_function_beat_duration.append((current_state, current_state_duration))
             sampled_beats.extend(sample_beats(current_state, current_state_duration))
+
+            prev_prev_state = prev_state
+            prev_state = current_state
 
         return sampled_beats
 
@@ -257,3 +322,14 @@ class HMM:
 
         (prob, state) = max([(V[-1][y], y) for y in states])
         return (prob, path[state])
+
+    def collapse_chord_sequence(self, chord_sequence):
+        if len(chord_sequence) <= 1:
+            return chord_sequence
+
+        collapsed_sequence = [chord_sequence[0]]
+        for i in range(1, len(chord_sequence)):
+            if chord_sequence[i] != collapsed_sequence[-1]:
+                collapsed_sequence.append(chord_sequence[i])
+
+        return collapsed_sequence

@@ -77,8 +77,9 @@ class SongInfo:
                     clef = 'treble' if msg.note >= 60 else 'bass'
                     chord = get_event_matching_chord(seconds_onset, self.chord_timings)
 
-                    note = TrainingNote(msg.note, clef, note_duration, seconds_onset, chord, self.song_key)
-                    notes.append(note)
+                    if clef == 'treble':
+                        note = TrainingNote(msg.note, clef, note_duration, seconds_onset, chord, self.song_key)
+                        notes.append(note)
                     del active_notes[msg.note]
 
         return notes
@@ -163,7 +164,7 @@ class TrainingDataProcessedInfo:
                         except Exception:
                             beats_chords_function_list.append('N')
 
-                    all_song_notes.append(song_info.notes)
+                    all_song_beat_chords.append(beats_chords_function_list)
                     all_song_notes.extend(song_info.notes)
 
                 except Exception as e:

@@ -169,49 +169,9 @@ class TrainingNote:
         return False
 
 class GeneratedNote:
-    def __init__(self, chord_tone, chord_function, octave_offset):
-        self.chord_tone = chord_tone
-        self.chord_function = chord_function
-        self.octave_offset = octave_offset
-
-    def get_note_midi_pitch(self, song_key: KeyTiming):
-        chromatic_intervals_inverted = {
-            "root": 0, "b2": 1, "2nd": 2, "b3": 3, "3rd": 4, "4th": 5,
-            "b5": 6, "5th": 7, "b6": 8, "6th": 9, "b7": 10, "7th": 11, "octave": 12
-        }
-
-        chord_function_to_semitones = {
-            'I': 0,   # Tonic (0 semitones above root)
-            'ii': 2,  # 2 semitones above root
-            'iii': 4, # 4 semitones above root
-            'IV': 5,  # 5 semitones above root
-            'V': 7,   # 7 semitones above root ← We need this!
-            'vi': 9,  # 9 semitones above root
-            'vii': 11 # 11 semitones above root
-        }
-
-        note_to_pitch_class = {
-            'C': 0, 
-            'C#': 1, 'Db': 1,
-            'D': 2,
-            'D#': 3, 'Eb': 3,
-            'E': 4,
-            'F': 5,
-            'F#': 6, 'Gb': 6,
-            'G': 7,
-            'G#': 8, 'Ab': 8,
-            'A': 9,
-            'A#': 10, 'Bb': 10,
-            'B': 11
-        }
-
-        key_root_note = song_key.get_root_note()
-        key_root_note_midi_pitch = 60 + note_to_pitch_class.get(key_root_note, 0)
-
-        chord_root_note_midi_pitch = key_root_note_midi_pitch + chord_function_to_semitones.get(self.chord_function, 0)
-        note_midi_value = chord_root_note_midi_pitch + chromatic_intervals_inverted.get(self.chord_tone, 0) + (self.octave_offset * 12)
-
-        return note_midi_value
+    def __init__(self, midi_pitch, duration):
+        self.midi_pitch = midi_pitch
+        self.duration = duration
 
 class OrnamentNote:
     def __init__(self, note_role, note_offset, note_duration):

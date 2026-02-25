@@ -1,6 +1,46 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from HMM import HMM
+
 from collections import defaultdict
-from Note import OrnamentGrouping
+from Note import OrnamentGrouping, GeneratedNote
 import numpy as np
+
+class Generator:
+    def __init__(self, chord_progression_hmm: HMM, ornament_hmms: OrnamentNoteHMMs):
+        self.chord_progression_hmm = chord_progression_hmm
+        self.ornament_note_hmm = ornament_hmms
+
+    def generate(self, key) -> list[GeneratedNote]:
+        full_sequence = []
+
+        sampled_beats: list = self.chord_progression_hmm.generate()
+        for i in range(len(sampled_beats)-1):
+            beat_1_pitch = sampled_beats[i].calc_midi_pitch(key)
+            beat_2_pitch = sampled_beats[i+1].calc_midi_pitch(key)
+            offset = beat_1_pitch - beat_2_pitch
+            chord_function = sampled_beats[i].chord_function
+
+            ornament_notes = self.ornament_note_hmm.generate_sequence(offset, chord_function)
+
+            full_sequence.append(GeneratedNote(beat_1_pitch, 'quaver'))
+            for ornament_note in ornament_notes:
+                midi_pitch = full_sequence[-1].midi_pitch + ornament_note.offset
+                duration = ornament_note.duration
+                full_sequence.append(GeneratedNote(midi_pitch, duration))
+
+            final_note_pitch = sampled_beats[-1].calc_midi_pitch(key)
+            full_sequence.append(GeneratedNote(final_note_pitch, 'quaver'))
+
+        return full_sequence
+
+class OrnamentEmission:
+    def __init__(self, offset, duration):
+        self.offset = offset
+        self.duration = duration
 
 class OrnamentNoteHMMs:
     def __init__(self, ornament_groupings: list[OrnamentGrouping]):
@@ -16,13 +56,15 @@ class OrnamentNoteHMMs:
 
             offset_function_dict[(note_offset, chord_function)].append(grouping)
 
+
         return offset_function_dict
 
     def train_hmms(self):
         for offset_chord_function, training_data in self.offset_function_training_data_mapping.items():
             hmm = OrnamentHMM()
-            hmm.train_model(training_data)
-            self.hmms[offset_chord_function] = hmm
+            succ_train = hmm.train_model(training_data)
+            if succ_train:
+                self.hmms[offset_chord_function] = hmm
 
     def generate_sequence(self, offset, chord_function):
         if (offset, chord_function) not in self.hmms:
@@ -30,7 +72,7 @@ class OrnamentNoteHMMs:
             return []
 
         hmm = self.hmms[(offset, chord_function)]
-        _, sampled_sequence = hmm.sample(1)
+        _, sampled_sequence = hmm.generate(1)
         return sampled_sequence
 
 class OrnamentHMM:
@@ -66,6 +108,9 @@ class OrnamentHMM:
                 next_note_role = grouping.ornament_notes[i+1].role
                 transition_count[curr_note_role][next_note_role] += 1
 
+        if len(transition_count) == 0:
+            print('no training data')
+
         transition_probs = defaultdict(lambda: defaultdict(float))
         for curr_type in transition_count.keys():
             total_count = sum(transition_count[curr_type].values())
@@ -98,14 +143,15 @@ class OrnamentHMM:
 
         return next_hidden_states[np.random.choice(len(next_hidden_states), p=next_hidden_probs)]
 
-    def sample_emission(self, hidden_state):
+    def sample_emission(self, hidden_state) -> OrnamentEmission:
         if hidden_state not in self.emission_matrix:
             raise ValueError("Invalid hidden state")
 
         emission_notes = list(self.emission_matrix[hidden_state].keys())
         emission_probs = list(self.emission_matrix[hidden_state].values())
 
-        return emission_notes[np.random.choice(len(emission_notes), p=emission_probs)]
+        offset, duration = emission_notes[np.random.choice(len(emission_notes), p=emission_probs)]
+        return OrnamentEmission(offset, duration)
 
     def sample_initial_state(self):
         hidden_states = list(self.initial_probabilities.keys())
@@ -117,10 +163,12 @@ class OrnamentHMM:
             self.transition_matrix = self.calc_transition_matrix(ornament_groupings)
             self.emission_matrix = self.calc_emission_matrix(ornament_groupings)
             self.initial_probabilities = self.calc_initial_probabilities()
+            return True
         except ValueError as e:
-            raise e
+            print(f'Error training model: {e}')
+            return False
 
-    def sample(self, num_samples=10):
+    def generate(self, num_samples=10):
         current_state = self.sample_initial_state()
         current_emission = self.sample_emission(current_state)
 
