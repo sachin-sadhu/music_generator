@@ -1,11 +1,29 @@
-from music21 import stream, note, tempo
+from music21 import stream, note, tempo, instrument, chord
 from Preprocessing import *
 from ChordFunctions import *
 from HMM import HMM
 from SecondLayerHMM import Generator
 from Timings import KeyTiming
 
-def notes_to_midi(notes, filename='output.mid', bpm=120):
+def notes_to_midi(notes, filename='jabooboo.mid', bpm=80):
+    CHORD_TEMPLATES = {
+        'C:maj': [0, 4, 7],
+        'C:min': [0, 3, 7],
+        'D:min': [2, 5, 9], 
+        'D:maj': [2, 6, 9],
+        'E:min': [4, 7, 11],
+        'E:maj': [4, 8, 11],
+        'F:maj': [5, 9, 12],     # F-A-C
+        'F:min': [5, 8, 12],     # F-Ab-C
+        'G:maj': [7, 11, 14],    # G-B-D
+        'G:min': [7, 10, 14],    # G-Bb-D
+        'A:min': [9, 12, 16],    # A-C-E
+        'A:maj': [9, 13, 16],    # A-C#-E
+        'B:min': [11, 14, 18],   # B-D-F#
+        'B:maj': [11, 15, 18],   # B-D#-F#
+        'B:dim': [11, 14, 17],   # B-D-F
+        'G:7': [7, 11, 14, 17]   # G-B-D-F
+    }
 
     duration_to_beats_map = {
         'semiquaver': 0.25,
@@ -17,19 +35,45 @@ def notes_to_midi(notes, filename='output.mid', bpm=120):
         'dotted_minim': 3,
         'semibreve': 4
     }
-    """Convert list of (pitch, duration) to MIDI."""
-    s = stream.Stream()
-    s.append(tempo.MetronomeMark(number=bpm))
+    score = stream.Score()
+
+    # Treble clef part
+    treble = stream.Part()
+    treble.append(instrument.Piano())
+    treble.append(tempo.MetronomeMark(number=bpm))
+
+    # Bass clef part
+    bass = stream.Part()
+    bass.append(instrument.Piano())
+
+    current_chord = None
     
     for curr_note in notes:
+        # Treble melody note
         pitch = curr_note.midi_pitch
         n = note.Note(pitch)
 
         duration = duration_to_beats_map.get(curr_note.duration, 1.0)
         n.quarterLength = duration  # Duration in quarter notes
-        s.append(n)
-    
-    s.write('midi', fp=filename)
+        treble.append(n)
+
+        if curr_note.chord != current_chord and curr_note.chord in CHORD_TEMPLATES:
+            # chord has changed
+            chord_tones = CHORD_TEMPLATES[curr_note.chord]
+            bass_notes = []
+            for tone in chord_tones:
+                bass_pitch = 48 + tone
+                bass_notes.append(bass_pitch)
+
+            bass_chord = chord.Chord(bass_notes)
+            bass_chord.quarterLength = 1.0
+            bass.append(bass_chord)
+
+            current_chord = curr_note.chord
+
+    score.append(treble)
+    score.append(bass)
+    score.write('midi', fp=filename)
 
 def fill_chord_triad(notes, key):
     CHORD_TEMPLATES = {
@@ -70,7 +114,7 @@ def fill_chord_triad(notes, key):
     print(chord_tones)
 
 if __name__ == "__main__":
-    directory = "/cs/home/slzys1/Documents/music_generator/test_data/"
+    directory = "/home/sachin/Documents/music_generator/POP909/POP909"
     data = TrainingDataProcessedInfo()
     data.load_training_data(directory)
 
@@ -82,11 +126,10 @@ if __name__ == "__main__":
 
     song = Generator(chord_beat_hmm, ornament_hmms)
     key = KeyTiming('C:maj')
-    sequence = song.generate(key)
-    print(sequence)
+    melody_sequence = song.generate(key)
+    print(melody_sequence)
 
-    notes_to_midi(sequence)
-    
+    notes_to_midi(melody_sequence)
     
     #converted_notes = []
     #beat_counter = 0

@@ -135,7 +135,7 @@ def transpose_chord_to_c_major(chord: ChordTiming, song_key: KeyTiming):
 
     return transposed_chord
 
-def get_chord_name_in_original_key(roman_numeral: str, key: str):
+def get_chord_name_in_original_key(roman_numeral: str, key: KeyTiming):
     """
     Convert a Roman numeral chord notation to its actual chord name in a given key.
 
@@ -182,7 +182,7 @@ def get_chord_name_in_original_key(roman_numeral: str, key: str):
         'B': 11
     }
 
-    (key_root_note, _) = get_key_root_and_type(key)
+    key_root_note = key.get_root_note()
     key_root_note_number = note_to_pitch_class[key_root_note]
     scale_num_semitones = roman_numeral_to_semitones[roman_numeral]
     chord_pitch_class = (key_root_note_number + scale_num_semitones) % 12

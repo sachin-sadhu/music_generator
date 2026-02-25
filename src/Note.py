@@ -169,9 +169,10 @@ class TrainingNote:
         return False
 
 class GeneratedNote:
-    def __init__(self, midi_pitch, duration):
+    def __init__(self, midi_pitch, duration, chord):
         self.midi_pitch = midi_pitch
         self.duration = duration
+        self.chord = chord
 
 class OrnamentNote:
     def __init__(self, note_role, note_offset, note_duration):

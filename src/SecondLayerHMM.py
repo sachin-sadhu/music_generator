@@ -7,6 +7,7 @@ if TYPE_CHECKING:
 
 from collections import defaultdict
 from Note import OrnamentGrouping, GeneratedNote
+from ChordFunctions import get_chord_name_in_original_key
 import numpy as np
 
 class Generator:
@@ -18,22 +19,27 @@ class Generator:
         full_sequence = []
 
         sampled_beats: list = self.chord_progression_hmm.generate()
+        print(sampled_beats)
         for i in range(len(sampled_beats)-1):
             beat_1_pitch = sampled_beats[i].calc_midi_pitch(key)
             beat_2_pitch = sampled_beats[i+1].calc_midi_pitch(key)
             offset = beat_1_pitch - beat_2_pitch
             chord_function = sampled_beats[i].chord_function
+            note_chord = get_chord_name_in_original_key(chord_function, key)
 
             ornament_notes = self.ornament_note_hmm.generate_sequence(offset, chord_function)
 
-            full_sequence.append(GeneratedNote(beat_1_pitch, 'quaver'))
+            full_sequence.append(GeneratedNote(beat_1_pitch, 'quaver', note_chord))
             for ornament_note in ornament_notes:
                 midi_pitch = full_sequence[-1].midi_pitch + ornament_note.offset
                 duration = ornament_note.duration
-                full_sequence.append(GeneratedNote(midi_pitch, duration))
+                full_sequence.append(GeneratedNote(midi_pitch, duration, note_chord))
+            full_sequence.append(GeneratedNote(beat_2_pitch, 'quaver', note_chord))
 
-            final_note_pitch = sampled_beats[-1].calc_midi_pitch(key)
-            full_sequence.append(GeneratedNote(final_note_pitch, 'quaver'))
+        final_note_pitch = sampled_beats[-1].calc_midi_pitch(key)
+        chord_function = sampled_beats[-1].chord_function
+        note_chord = get_chord_name_in_original_key(chord_function, key)
+        full_sequence.append(GeneratedNote(final_note_pitch, 'quaver', note_chord))
 
         return full_sequence
 
