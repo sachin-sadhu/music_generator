@@ -174,18 +174,33 @@ class OrnamentHMM:
             print(f'Error training model: {e}')
             return False
 
-    def generate(self, num_samples=10):
-        current_state = self.sample_initial_state()
-        current_emission = self.sample_emission(current_state)
+    def generate(self, remaining_beats=3):
+        hidden_state = self.sample_initial_state()
+        emission = self.sample_emission(hidden_state)
 
-        sampled_hidden_states = [current_state]
-        sampled_emissions = [current_emission]
+        sampled_hidden_states = [hidden_state]
+        sampled_emissions = [emission]
 
-        while len(sampled_emissions) < num_samples:
-            current_state = self.sample_next_hidden_state(current_state)
-            current_emission = self.sample_emission(current_state)
-            
-            sampled_hidden_states.append(current_state)
-            sampled_emissions.append(current_emission)
+        # so basically, this samples some beats, lets say i fix the distance between skeleton notes
+        # then i know how many beats i have to sample with
+        # so then, i only want to sample beats that have a duration <= the beats i have left 
+        # could just repeatedly sample, lets say 10 times until i get a valid note, if after 10 samples
+        # i dont get any valid notes, just take the next sampled pitch, fix it to a duration equal to remaining duration
+
+        while remaining_beats > 0:
+            hidden_state = self.sample_next_hidden_state(hidden_state)
+            found_valid_emission = False
+            for i in range(10):
+                emission = self.sample_emission(hidden_state)
+                if emission.duration <= remaining_beats:
+                    found_valid_emission = True
+                    break
+            if not found_valid_emission:
+                emission = self.sample_emission(hidden_state)
+                emission.duration = remaining_beats
+            remaining_beats -= emission.duration
+
+            sampled_hidden_states.append(hidden_state)
+            sampled_emissions.append(emission)
 
         return sampled_hidden_states, sampled_emissions

@@ -5,7 +5,7 @@ from HMM import HMM
 from SecondLayerHMM import Generator
 from Timings import KeyTiming
 
-def notes_to_midi(notes, filename='jabooboo.mid', bpm=80):
+def notes_to_midi(notes, filename='bloot.mid', bpm=80):
     CHORD_TEMPLATES = {
         'C:maj': [0, 4, 7],
         'C:min': [0, 3, 7],
@@ -57,19 +57,32 @@ def notes_to_midi(notes, filename='jabooboo.mid', bpm=80):
         n.quarterLength = duration  # Duration in quarter notes
         treble.append(n)
 
-        if curr_note.chord != current_chord and curr_note.chord in CHORD_TEMPLATES:
-            # chord has changed
+        # Bass arpeggio for the current chord
+        if curr_note.chord in CHORD_TEMPLATES:
             chord_tones = CHORD_TEMPLATES[curr_note.chord]
-            bass_notes = []
-            for tone in chord_tones:
-                bass_pitch = 48 + tone
-                bass_notes.append(bass_pitch)
+            
+            # Calculate arpeggio note duration (divide melody duration by number of chord tones)
+            arpeggio_note_duration = duration / len(chord_tones)
+            
+            for i, tone in enumerate(chord_tones):
+                bass_pitch = 48 + tone  # Bass register
+                bass_note = note.Note(bass_pitch)
+                bass_note.quarterLength = duration
+                bass.append(bass_note)
 
-            bass_chord = chord.Chord(bass_notes)
-            bass_chord.quarterLength = 1.0
-            bass.append(bass_chord)
+        #if curr_note.chord != current_chord and curr_note.chord in CHORD_TEMPLATES:
+            ## chord has changed
+            #chord_tones = CHORD_TEMPLATES[curr_note.chord]
+            #bass_notes = []
+            #for tone in chord_tones:
+                #bass_pitch = 48 + tone
+                #bass_notes.append(bass_pitch)
 
-            current_chord = curr_note.chord
+            #bass_chord = chord.Chord(bass_notes)
+            #bass_chord.quarterLength = 1.0
+            #bass.append(bass_chord)
+
+            #current_chord = curr_note.chord
 
     score.append(treble)
     score.append(bass)
@@ -125,7 +138,7 @@ if __name__ == "__main__":
     ornament_hmms.train_hmms()
 
     song = Generator(chord_beat_hmm, ornament_hmms)
-    key = KeyTiming('C:maj')
+    key = KeyTiming('D:maj')
     melody_sequence = song.generate(key)
     print(melody_sequence)
 
