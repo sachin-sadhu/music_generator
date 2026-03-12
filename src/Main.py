@@ -4,8 +4,9 @@ from ChordFunctions import *
 from HMM import HMM
 from SecondLayerHMM import Generator
 from Timings import KeyTiming
+from Rhythm import RhythmMC
 
-def notes_to_midi(notes, filename='wtf.mid', bpm=80):
+def notes_to_midi(notes, filename='pluto.mid', bpm=80):
     CHORD_TEMPLATES = {
         'C:maj': [0, 4, 7],
         'C:min': [0, 3, 7],
@@ -207,6 +208,8 @@ if __name__ == "__main__":
     data = TrainingDataProcessedInfo()
     data.load_training_data(directory)
 
+    rhythm_mc = RhythmMC(data.notes)
+
     chord_beat_hmm = HMM()
     chord_beat_hmm.train_model(data.notes, data.beat_chords)
 
@@ -215,15 +218,14 @@ if __name__ == "__main__":
 
     ornament_hmms.print_stats()
 
-    song = Generator(chord_beat_hmm, ornament_hmms)
-    key = KeyTiming('C:maj')
+    song = Generator(chord_beat_hmm, ornament_hmms, rhythm_mc)
+    key = KeyTiming('D:maj')
     melody_sequence = song.generate(key)
     cleaned_melody = postprocess_melody(melody_sequence, key)
     print(cleaned_melody)
 
     notes_to_midi(cleaned_melody)
-    
-    #converted_notes = []
+        #converted_notes = []
     #beat_counter = 0
     #for count, note in enumerate(sequence):
         #beat_onset = count % 4

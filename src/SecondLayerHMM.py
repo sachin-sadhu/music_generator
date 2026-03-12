@@ -8,12 +8,14 @@ if TYPE_CHECKING:
 from collections import defaultdict
 from Note import OrnamentGrouping, GeneratedNote
 from ChordFunctions import get_chord_name_in_original_key
+from Rhythm import RhythmMC
 import numpy as np
 
 class Generator:
-    def __init__(self, chord_progression_hmm: HMM, ornament_hmms: OrnamentNoteHMMs):
+    def __init__(self, chord_progression_hmm: HMM, ornament_hmms: OrnamentNoteHMMs, rhythm_mc: RhythmMC):
         self.chord_progression_hmm = chord_progression_hmm
         self.ornament_note_hmm = ornament_hmms
+        self.rhythm_mc = rhythm_mc
 
     def generate(self, key) -> list[GeneratedNote]:
         full_sequence = []
@@ -28,7 +30,7 @@ class Generator:
             chord_function = sampled_beats[i].chord_function
             note_chord = get_chord_name_in_original_key(chord_function, key)
 
-            ornament_notes = self.ornament_note_hmm.generate_sequence(offset, chord_function)
+            ornament_notes = self.ornament_note_hmm.generate_sequence(offset, chord_function, self.rhythm_mc)
 
             full_sequence.append(GeneratedNote(beat_1_pitch, skeleton_notes_beat_duration, note_chord))
             for ornament_note in ornament_notes:
@@ -78,13 +80,13 @@ class OrnamentNoteHMMs:
                 for role, count in hmm.num_of_each_role.items():
                     self.num_of_each_role[role] += count
 
-    def generate_sequence(self, offset, chord_function):
+    def generate_sequence(self, offset, chord_function, rhythm_mc):
         if (offset, chord_function) not in self.hmms:
             print(f'{offset, chord_function} not found in self.hmms')
             return []
 
         hmm = self.hmms[(offset, chord_function)]
-        _, sampled_sequence = hmm.generate(1)
+        _, sampled_sequence = hmm.generate(rhythm_mc)
         return sampled_sequence
 
 class OrnamentHMM:
@@ -182,7 +184,7 @@ class OrnamentHMM:
             print(f'Error training model: {e}')
             return False
 
-    def generate(self, remaining_beats=1.5):
+    def generate(self, rhytm_mc: RhythmMC, remaining_beats=1.5):
         hidden_state = self.sample_initial_state()
         emission = self.sample_emission(hidden_state)
 
@@ -200,9 +202,11 @@ class OrnamentHMM:
             found_valid_emission = False
             for i in range(10):
                 emission = self.sample_emission(hidden_state)
+                next_duration = rhytm_mc.sample_next_duration(sampled_emissions[-1].duration)
                 print(f'remaining beat duration: {remaining_beats}. found an emission with a duration {emission.duration}')
-                if emission.duration <= remaining_beats:
+                if next_duration <= remaining_beats:
                     found_valid_emission = True
+                    emission.duration = next_duration
                     break
             if not found_valid_emission:
                 emission = self.sample_emission(hidden_state)
