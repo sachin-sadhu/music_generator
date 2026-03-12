@@ -17,6 +17,7 @@ class Generator:
 
     def generate(self, key) -> list[GeneratedNote]:
         full_sequence = []
+        skeleton_notes_beat_duration = 0.5
 
         sampled_beats: list = self.chord_progression_hmm.generate()
         print(sampled_beats)
@@ -29,17 +30,17 @@ class Generator:
 
             ornament_notes = self.ornament_note_hmm.generate_sequence(offset, chord_function)
 
-            full_sequence.append(GeneratedNote(beat_1_pitch, 'quaver', note_chord))
+            full_sequence.append(GeneratedNote(beat_1_pitch, skeleton_notes_beat_duration, note_chord))
             for ornament_note in ornament_notes:
                 midi_pitch = full_sequence[-1].midi_pitch + ornament_note.offset
                 duration = ornament_note.duration
                 full_sequence.append(GeneratedNote(midi_pitch, duration, note_chord))
-            full_sequence.append(GeneratedNote(beat_2_pitch, 'quaver', note_chord))
+            full_sequence.append(GeneratedNote(beat_2_pitch, skeleton_notes_beat_duration, note_chord))
 
         final_note_pitch = sampled_beats[-1].calc_midi_pitch(key)
         chord_function = sampled_beats[-1].chord_function
         note_chord = get_chord_name_in_original_key(chord_function, key)
-        full_sequence.append(GeneratedNote(final_note_pitch, 'quaver', note_chord))
+        full_sequence.append(GeneratedNote(final_note_pitch, skeleton_notes_beat_duration, note_chord))
 
         return full_sequence
 
@@ -52,6 +53,10 @@ class OrnamentNoteHMMs:
     def __init__(self, ornament_groupings: list[OrnamentGrouping]):
         self.offset_function_training_data_mapping = self.split_song_ornaments(ornament_groupings)
         self.hmms = {}
+        self.num_of_each_role = defaultdict(int)
+
+    def print_stats(self):
+        print(self.num_of_each_role)
 
     def split_song_ornaments(self, ornament_groupings: list[OrnamentGrouping]):
         offset_function_dict = defaultdict(list)
@@ -62,7 +67,6 @@ class OrnamentNoteHMMs:
 
             offset_function_dict[(note_offset, chord_function)].append(grouping)
 
-
         return offset_function_dict
 
     def train_hmms(self):
@@ -71,6 +75,8 @@ class OrnamentNoteHMMs:
             succ_train = hmm.train_model(training_data)
             if succ_train:
                 self.hmms[offset_chord_function] = hmm
+                for role, count in hmm.num_of_each_role.items():
+                    self.num_of_each_role[role] += count
 
     def generate_sequence(self, offset, chord_function):
         if (offset, chord_function) not in self.hmms:
@@ -86,6 +92,7 @@ class OrnamentHMM:
         self.transition_matrix = {}
         self.emission_matrix = {}
         self.initial_probabilities = {}
+        self.num_of_each_role = defaultdict(int)
 
     def calc_initial_probabilities(self):
         initial_probabilities = {}
@@ -120,6 +127,7 @@ class OrnamentHMM:
         transition_probs = defaultdict(lambda: defaultdict(float))
         for curr_type in transition_count.keys():
             total_count = sum(transition_count[curr_type].values())
+            self.num_of_each_role[curr_type] += total_count
             for next_type, count in transition_count[curr_type].items():
                 transition_probs[curr_type][next_type] = count / total_count
 
@@ -174,7 +182,7 @@ class OrnamentHMM:
             print(f'Error training model: {e}')
             return False
 
-    def generate(self, remaining_beats=3):
+    def generate(self, remaining_beats=1.5):
         hidden_state = self.sample_initial_state()
         emission = self.sample_emission(hidden_state)
 
@@ -192,6 +200,7 @@ class OrnamentHMM:
             found_valid_emission = False
             for i in range(10):
                 emission = self.sample_emission(hidden_state)
+                print(f'remaining beat duration: {remaining_beats}. found an emission with a duration {emission.duration}')
                 if emission.duration <= remaining_beats:
                     found_valid_emission = True
                     break

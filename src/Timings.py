@@ -96,7 +96,7 @@ class BeatTiming:
         return self.beat_time
 
     def is_strong_beat(self):
-        return self.strong_beat
+        return self.new_bar
 
     def is_new_bar(self):
         return self.new_bar
