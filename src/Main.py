@@ -6,7 +6,7 @@ from SecondLayerHMM import Generator
 from Timings import KeyTiming
 from Rhythm import RhythmMC
 
-def notes_to_midi(notes, filename='pluto.mid', bpm=80):
+def notes_to_midi(notes, filename='a_fuck this.mid', bpm=80):
     CHORD_TEMPLATES = {
         'C:maj': [0, 4, 7],
         'C:min': [0, 3, 7],
@@ -219,7 +219,7 @@ if __name__ == "__main__":
     ornament_hmms.print_stats()
 
     song = Generator(chord_beat_hmm, ornament_hmms, rhythm_mc)
-    key = KeyTiming('D:maj')
+    key = KeyTiming('A:maj')
     melody_sequence = song.generate(key)
     cleaned_melody = postprocess_melody(melody_sequence, key)
     print(cleaned_melody)
