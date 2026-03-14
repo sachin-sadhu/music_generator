@@ -1,34 +1,129 @@
-from collections import defaultdict
-from Note import TrainingNote
+import pretty_midi
 import numpy as np
+from hmmlearn import hmm
+from sklearn.model_selection import KFold
 
-class RhythmMC:
-    def __init__(self, training_notes: list[TrainingNote]) -> None:
-        self.mc = self.calc_mc(training_notes)
+def extract_rhythm_sequence(midi_path, beats_per_bar=4, subdivisions=4, n_bars=16):
+    """
+        here subdivisions indicates each beat being divided, using semiquavers as each timestep.
+    """
+    pm = pretty_midi.PrettyMIDI(midi_path)
 
-    def calc_mc(self, training_notes):
-        transition_count = defaultdict(lambda: defaultdict(int))   
+    beat_times = pm.get_beats()
 
-        for i in range(len(training_notes)-1):
-            curr_note_duration = training_notes[i].duration
-            next_note_duration = training_notes[i+1].duration
+    grid = []
+    for i in range(len(beat_times)-1):
+        beat_duration = beat_times[i+1] - beat_times[i]
+        step_duration = beat_duration / subdivisions
+        for s in range(subdivisions):
+            grid.append(beat_times[i] + s * step_duration)
+    
+    m = beats_per_bar * subdivisions * n_bars
+    grid = grid[:m]
 
-            transition_count[curr_note_duration][next_note_duration] += 1
+    melody_track = pm.instruments[0]
+    notes = []
+    for note in melody_track.notes:
+        if note.start < grid[0]:
+            continue
 
-        transition_probs = defaultdict(lambda: defaultdict(float))
-        for curr_duration in transition_count.keys():
-            total_count = sum(transition_count[curr_duration].values())
-            for next_duration, count in transition_count[curr_duration].items():
-                transition_probs[curr_duration][next_duration] = count / total_count
+        if note.start > grid[-1]:
+            break
 
-        return transition_probs
+        onset_index = np.argmin(np.abs(np.array(grid) - note.start))
+        offset_index = np.argmin(np.abs(np.array(grid) - note.end))
+        notes.append((onset_index, offset_index))
 
-    def sample_next_duration(self, curr_duration):
-        default_duration = 0.5
-        if curr_duration not in self.mc:
-            return default_duration
+    sequence = np.full(m, 3) # default is silence
 
-        candidate_durations = list(self.mc[curr_duration].keys())
-        candidate_durations_probs = list(self.mc[curr_duration].values())
+    for onset_index, offset_index, in notes:
+        if onset_index < m:
+            sequence[onset_index] = 1 # note starting
+            for t in range(onset_index + 1, min(offset_index, m)):
+                sequence[t] = 2 # sustatin note
 
-        return candidate_durations[np.random.choice(len(candidate_durations), p=candidate_durations_probs)]
+    return sequence
+
+def train_model(training_data, validation_data, num_hidden_states, n_iter, tol=1e-7):
+    best_model = None
+    best_val_score = -np.inf
+
+    for _ in range(10):
+        model = hmm.CategoricalHMM(
+            n_components=num_hidden_states,
+            n_iter=n_iter,
+            random_state=30,
+            tol=tol
+        )
+        model.fit(training_data)
+        val_log_likelihood = model.score(validation_data)
+
+        if val_log_likelihood > best_val_score:
+            best_val_score = val_log_likelihood
+            best_model = model
+
+    return best_model
+
+def find_best_num_hidden_states(sequences):
+    hidden_state_candidates = [3,4,5,6]
+
+
+    kf = KFold(n_splits=5, shuffle=True, random_state=4)
+    num_hidden_states_avg_log_likelihood = {}
+
+    for num_hidden_states in hidden_state_candidates:
+        fold_log_likelihoods = []
+        for train_index, validation_index in kf.split(sequences):
+            print(f'training index: {train_index}')
+            print(f'validation_index: {validation_index}')
+
+            # Split into training and validation folds
+            training_data = [sequences[i] for i in train_index]
+            validation_data = [sequences[i] for i in validation_index]
+
+            model = hmm.CategoricalHMM(
+                n_components=num_hidden_states,
+                n_iter=100,
+                random_state=30
+            )
+            model.fit(training_data)
+            val_log_likelihood = model.score(validation_data)
+            fold_log_likelihoods.append(val_log_likelihood)
+
+        avg_log_likelihood = np.mean(fold_log_likelihoods)
+        num_hidden_states_avg_log_likelihood[num_hidden_states] = avg_log_likelihood
+
+    current_best_num_hidden_states = hidden_state_candidates[0]
+    current_best_log_likelihood = -np.inf
+
+    for num_hidden_states, log_likelihood in num_hidden_states_avg_log_likelihood.items():
+        if log_likelihood > current_best_log_likelihood:
+            current_best_num_hidden_states = num_hidden_states
+
+    return current_best_num_hidden_states, current_best_log_likelihood
+    
+    
+
+
+
+
+
+
+
+if __name__ == "__main__":
+    rhythm_1 = extract_rhythm_sequence("./POP909/001/001.mid")
+    rhythm_2 = extract_rhythm_sequence("./POP909/002/002.mid")
+    rhythm_3 = extract_rhythm_sequence("./POP909/003/003.mid")
+    rhythm_4 = extract_rhythm_sequence("./POP909/004/004.mid")
+    rhythm_5 = extract_rhythm_sequence("./POP909/005/005.mid")
+
+    rhythm = [rhythm_1, rhythm_2, rhythm_3, rhythm_4, rhythm_5]
+
+    model = hmm.CategoricalHMM(n_components=8, n_iter=100)
+    model.fit(rhythm)
+    #print(model.monitor_)
+    score = model.score(rhythm)
+    #print(score)
+    train_model(rhythm)
+
+
