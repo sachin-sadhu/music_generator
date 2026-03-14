@@ -5,7 +5,7 @@ from HMM import HMM
 from SecondLayerHMM import Generator
 from Timings import KeyTiming
 
-def notes_to_midi(notes, filename='jabooboo.mid', bpm=80):
+def notes_to_midi(notes, filename='output.mid', bpm=80):
     CHORD_TEMPLATES = {
         'C:maj': [0, 4, 7],
         'C:min': [0, 3, 7],
@@ -46,8 +46,6 @@ def notes_to_midi(notes, filename='jabooboo.mid', bpm=80):
     bass = stream.Part()
     bass.append(instrument.Piano())
 
-    current_chord = None
-    
     for curr_note in notes:
         # Treble melody note
         pitch = curr_note.midi_pitch
@@ -56,8 +54,9 @@ def notes_to_midi(notes, filename='jabooboo.mid', bpm=80):
         duration = duration_to_beats_map.get(curr_note.duration, 1.0)
         n.quarterLength = duration  # Duration in quarter notes
         treble.append(n)
+        print(curr_note.chord)
 
-        if curr_note.chord != current_chord and curr_note.chord in CHORD_TEMPLATES:
+        if curr_note.chord in CHORD_TEMPLATES:
             # chord has changed
             chord_tones = CHORD_TEMPLATES[curr_note.chord]
             bass_notes = []
@@ -66,10 +65,12 @@ def notes_to_midi(notes, filename='jabooboo.mid', bpm=80):
                 bass_notes.append(bass_pitch)
 
             bass_chord = chord.Chord(bass_notes)
-            bass_chord.quarterLength = 1.0
+            bass_chord.quarterLength = duration
             bass.append(bass_chord)
-
-            current_chord = curr_note.chord
+        else:
+            r = note.Rest()
+            r.quarterLength = duration
+            bass.append(r)
 
     score.append(treble)
     score.append(bass)
@@ -114,7 +115,7 @@ def fill_chord_triad(notes, key):
     print(chord_tones)
 
 if __name__ == "__main__":
-    directory = "/home/sachin/Documents/music_generator/POP909/POP909"
+    directory = "/cs/home/slzys1/Documents/music_generator/POP909"
     data = TrainingDataProcessedInfo()
     data.load_training_data(directory)
 
@@ -125,11 +126,11 @@ if __name__ == "__main__":
     ornament_hmms.train_hmms()
 
     song = Generator(chord_beat_hmm, ornament_hmms)
-    key = KeyTiming('C:maj')
+    key = KeyTiming('F:maj')
     melody_sequence = song.generate(key)
     print(melody_sequence)
 
-    notes_to_midi(melody_sequence)
+    notes_to_midi(melody_sequence, filename="f_major.mid")
     
     #converted_notes = []
     #beat_counter = 0
