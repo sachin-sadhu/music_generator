@@ -4,8 +4,9 @@ from ChordFunctions import *
 from HMM import HMM
 from SecondLayerHMM import Generator
 from Timings import KeyTiming
+from Rhythm import RhythmMC
 
-def notes_to_midi(notes, filename='output.mid', bpm=80):
+def notes_to_midi(notes, filename='a_fuck this.mid', bpm=80):
     CHORD_TEMPLATES = {
         'C:maj': [0, 4, 7],
         'C:min': [0, 3, 7],
@@ -25,16 +26,6 @@ def notes_to_midi(notes, filename='output.mid', bpm=80):
         'G:7': [7, 11, 14, 17]   # G-B-D-F
     }
 
-    duration_to_beats_map = {
-        'semiquaver': 0.25,
-        'quaver': 0.50,
-        'dotted_quaver': 0.75,
-        'crotchet': 1.0,
-        'dotted_crotchet': 1.5,
-        'minim': 2.0,
-        'dotted_minim': 3,
-        'semibreve': 4
-    }
     score = stream.Score()
 
     # Treble clef part
@@ -51,26 +42,51 @@ def notes_to_midi(notes, filename='output.mid', bpm=80):
         pitch = curr_note.midi_pitch
         n = note.Note(pitch)
 
-        duration = duration_to_beats_map.get(curr_note.duration, 1.0)
-        n.quarterLength = duration  # Duration in quarter notes
+        n.quarterLength = curr_note.duration  # Duration in quarter notes
         treble.append(n)
         print(curr_note.chord)
 
-        if curr_note.chord in CHORD_TEMPLATES:
-            # chord has changed
-            chord_tones = CHORD_TEMPLATES[curr_note.chord]
-            bass_notes = []
-            for tone in chord_tones:
-                bass_pitch = 48 + tone
-                bass_notes.append(bass_pitch)
+        ## Bass arpeggio for the current chord
+        #if curr_note.chord in CHORD_TEMPLATES:
+            #chord_tones = CHORD_TEMPLATES[curr_note.chord]
+            
+            ## Calculate arpeggio note duration (divide melody duration by number of chord tones)
+            #arpeggio_note_duration = curr_note.duration / len(chord_tones)
+            
+            #for i, tone in enumerate(chord_tones):
+                #bass_pitch = 48 + tone  # Bass register
+                #bass_note = note.Note(bass_pitch)
+                #bass_note.quarterLength = curr_note.duration
+                ##bass.append(bass_note)
 
-            bass_chord = chord.Chord(bass_notes)
-            bass_chord.quarterLength = duration
-            bass.append(bass_chord)
-        else:
-            r = note.Rest()
-            r.quarterLength = duration
-            bass.append(r)
+        # Steady bass line - quarter note roots
+        #if curr_note.chord != current_chord and curr_note.chord in CHORD_TEMPLATES:
+            ## Only play bass when chord changes
+            #root_tone = CHORD_TEMPLATES[curr_note.chord][0]  # Root note
+            #bass_pitch = 48 + root_tone
+            #bass_note = note.Note(bass_pitch)
+            #bass_note.quarterLength = 1.0  # Steady quarter note
+            #bass.append(bass_note)
+            #current_chord = curr_note.chord
+        #else:
+            ## Add rest to maintain steady rhythm
+            #rest = note.Rest()
+            #rest.quarterLength = curr_note.duration
+            #bass.append(rest)
+
+        #if curr_note.chord != current_chord and curr_note.chord in CHORD_TEMPLATES:
+            ## chord has changed
+            #chord_tones = CHORD_TEMPLATES[curr_note.chord]
+            #bass_notes = []
+            #for tone in chord_tones:
+                #bass_pitch = 48 + tone
+                #bass_notes.append(bass_pitch)
+
+            #bass_chord = chord.Chord(bass_notes)
+            #bass_chord.quarterLength = 1.0
+            #bass.append(bass_chord)
+
+            #current_chord = curr_note.chord
 
     score.append(treble)
     score.append(bass)
@@ -109,15 +125,89 @@ def fill_chord_triad(notes, key):
             beat_onset = count % 4
             for triad in chord_triad_offsets:
                 midi_pitch = 48 + triad
-                chord_tones.append((midi_pitch, 'crotchet', beat_onset))
+                chord_tones.append((midi_pitch, 1.0, beat_onset))
                 print(f'beat onset: {beat_onset}')
 
     print(chord_tones)
+
+def postprocess_melody(notes, key_name):
+    """
+    Clean up generated melody by avoiding really bad notes.
+    """
+    # Define key scales (notes to keep)
+    KEY_SCALES = {
+        'A:maj': [9, 11, 1, 2, 4, 6, 8],      # A, B, C#, D, E, F#, G#
+        'C:maj': [0, 2, 4, 5, 7, 9, 11],      # C, D, E, F, G, A, B
+        'D:maj': [2, 4, 6, 7, 9, 11, 1],      # D, E, F#, G, A, B, C#
+        'G:maj': [7, 9, 11, 0, 2, 4, 6],      # G, A, B, C, D, E, F#
+        # Add more keys as needed
+    }
+    
+    # Define tritones from tonic (notes to absolutely avoid)
+    TRITONES = {
+        'A:maj': 3,   # D#/Eb
+        'C:maj': 6,   # F#/Gb  
+        'D:maj': 8,   # G#/Ab
+        'G:maj': 1,   # C#/Db
+    }
+    
+    if key_name not in KEY_SCALES:
+        return notes  # Skip processing if key not defined
+    
+    allowed_notes = set(KEY_SCALES[key_name])
+    tritone = TRITONES.get(key_name)
+    
+    cleaned_notes = []
+    
+    for note in notes:
+        pitch_class = note.midi_pitch % 12  # Get note within one octave
+        
+        # Check if it's the dreaded tritone
+        if pitch_class == tritone:
+            # Move tritone to nearest safe note
+            if tritone + 1 in allowed_notes:
+                corrected_pitch = note.midi_pitch + 1
+            elif tritone - 1 in allowed_notes:
+                corrected_pitch = note.midi_pitch - 1
+            else:
+                corrected_pitch = note.midi_pitch + 2  # Fallback
+            
+            # Create corrected note
+            corrected_note = GeneratedNote(corrected_pitch, note.duration, note.chord)
+            cleaned_notes.append(corrected_note)
+            print(f"Fixed tritone: {note.midi_pitch} -> {corrected_pitch}")
+            
+        # Check if it's outside the key scale
+        elif pitch_class not in allowed_notes:
+            # Find nearest note in scale
+            distances = [(abs(pitch_class - allowed), allowed) for allowed in allowed_notes]
+            distances.sort(key=lambda x: x[0])
+            
+            nearest_note = distances[0][1]
+            pitch_adjustment = nearest_note - pitch_class
+            
+            # Handle octave wrapping
+            if abs(pitch_adjustment) > 6:
+                pitch_adjustment = 12 - abs(pitch_adjustment)
+                if pitch_adjustment < 0:
+                    pitch_adjustment = -pitch_adjustment
+                    
+            corrected_pitch = note.midi_pitch + pitch_adjustment
+            corrected_note = GeneratedNote(corrected_pitch, note.duration, note.chord)
+            cleaned_notes.append(corrected_note)
+            print(f"Fixed chromatic note: {note.midi_pitch} -> {corrected_pitch}")
+        else:
+            # Note is fine, keep it
+            cleaned_notes.append(note)
+    
+    return cleaned_notes
 
 if __name__ == "__main__":
     directory = "/cs/home/slzys1/Documents/music_generator/POP909"
     data = TrainingDataProcessedInfo()
     data.load_training_data(directory)
+
+    rhythm_mc = RhythmMC(data.notes)
 
     chord_beat_hmm = HMM()
     chord_beat_hmm.train_model(data.notes, data.beat_chords)
@@ -125,14 +215,16 @@ if __name__ == "__main__":
     ornament_hmms = OrnamentNoteHMMs(data.ornament_groupings)
     ornament_hmms.train_hmms()
 
-    song = Generator(chord_beat_hmm, ornament_hmms)
-    key = KeyTiming('F:maj')
-    melody_sequence = song.generate(key)
-    print(melody_sequence)
+    ornament_hmms.print_stats()
 
-    notes_to_midi(melody_sequence, filename="f_major.mid")
-    
-    #converted_notes = []
+    song = Generator(chord_beat_hmm, ornament_hmms, rhythm_mc)
+    key = KeyTiming('A:maj')
+    melody_sequence = song.generate(key)
+    cleaned_melody = postprocess_melody(melody_sequence, key)
+    print(cleaned_melody)
+
+    notes_to_midi(cleaned_melody)
+        #converted_notes = []
     #beat_counter = 0
     #for count, note in enumerate(sequence):
         #beat_onset = count % 4

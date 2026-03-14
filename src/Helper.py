@@ -1,4 +1,4 @@
-def quantise_beat_duration(beat_duration, grid_size=0.5, max_duration=4.0):
+def quantise_beat_duration(beat_duration, grid_size=0.25, max_duration=4.0):
     """
     Quantise a beat duration to the nearest musical note value.
 
@@ -11,16 +11,7 @@ def quantise_beat_duration(beat_duration, grid_size=0.5, max_duration=4.0):
         str: The name of the musical note value (e.g., 'crotchet', 'quaver', 'semibreve')
              that best represents the quantised beat duration.
     """
-    DURATION_BINS = {
-        0.25: 'semiquaver',
-        0.50: 'quaver',
-        0.75: 'dotted_quaver',
-        1.0: 'crotchet',
-        1.5: 'dotted_crotchet',
-        2.0: 'minim',
-        3: 'dotted_minim',
-        4: 'semibreve'
-    }
+    DURATION_BINS = [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 2.5, 3.5, 4.0]
 
     quantised = round(beat_duration / grid_size) * grid_size
 
@@ -29,5 +20,5 @@ def quantise_beat_duration(beat_duration, grid_size=0.5, max_duration=4.0):
     if quantised > max_duration:
         quantised = max_duration
 
-    closest = min(DURATION_BINS.keys(), key=lambda x: abs(x-quantised))
-    return DURATION_BINS[closest]
+    closest = min(DURATION_BINS, key=lambda x: abs(x-quantised))
+    return closest
