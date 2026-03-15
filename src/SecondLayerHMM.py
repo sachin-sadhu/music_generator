@@ -8,18 +8,23 @@ if TYPE_CHECKING:
 from collections import defaultdict
 from Note import OrnamentGrouping, GeneratedNote
 from ChordFunctions import get_chord_name_in_original_key
-from Rhythm import RhythmMC
 import numpy as np
 
 class Generator:
-    def __init__(self, chord_progression_hmm: HMM, ornament_hmms: OrnamentNoteHMMs, rhythm_mc: RhythmMC):
+    def __init__(self, chord_progression_hmm: HMM, ornament_hmms: OrnamentNoteHMMs, rhythm_sequence):
         self.chord_progression_hmm = chord_progression_hmm
         self.ornament_note_hmm = ornament_hmms
-        self.rhythm_mc = rhythm_mc
+        self.rhythm_sequence = rhythm_sequence
 
     def generate(self, key) -> list[GeneratedNote]:
         full_sequence = []
         skeleton_notes_beat_duration = 0.5
+
+        for timestep, value in enumerate(self.rhythm_sequence) :
+            # Find out if falling on a strong beat
+            if timestep % 4 
+
+
 
         sampled_beats: list = self.chord_progression_hmm.generate()
         print(sampled_beats)

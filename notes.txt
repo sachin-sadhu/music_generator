@@ -198,7 +198,31 @@ for example, given skeelton notes with interval 5, 'I'. lets say theres 2 neighb
 then i want do frequency counting for the hidden state, increment counter by 1 for neighbour tone -> neighbour tone
 also increement counter for emission matrix, where we want to use scale degree relative to the key
 
+ so basically, we can sample for 16 timesteps per bar, at each timestep, whether there should be a rest / or new note / old note
+
+ so no problem if at skeleton note either new note or sustained note. problem is if one of the skeleton notes
+ has a rest there, look to next timestep?
+
+ so now we have for each time sequence whether note should be new note / sustained 
+
+ isuee is that chord hmm might generate a 'I' lasting for 5 beats, each beat will generate a chord_tone
+ so we only want to use 1 and 3rd beat in a bar as skeleton notes
+
+ sample all chords and their respective skeleton notes. 
+ we only want these on strong beats, so only on first and third beat in a bar
+ so once we sample
+
+ loop through rhythm, keep track of where in bar we are:
+  if we fall on a strong beat:
+    if 1 on a strong beat, then we need to take a note from already sampled
+    if a 2, than just continue playing, make sure we still dequeue the note
+  if falls on a non-strong beat:
+    if 1, then we need a skeleton note, find closest leftmost and rightmost skeleton notes, calculate pitch interval and sample 
+    if 2, then just continue playing
 
 
+ loop through rhythm:
+  if we enocunter a 1, then we need a new note:
+    if falls on strong beat, then we can 
 
  
