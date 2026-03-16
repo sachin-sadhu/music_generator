@@ -249,13 +249,13 @@ class HMM:
         self.duration_matrix = self.calc_hidden_state_duration_matrix(beat_chords_dict)
         self.emission_matrix = self.calc_emission_state_transition_matrix(song_notes_dict)
 
-    def generate(self, num_samples=10):
+    def generate(self, num_beats=5):
         def sample_beats(hidden_state, num_beats):
+            print(f'Sampling {num_beats} for chord {hidden_state}')
             beats = []
             for _ in range(num_beats):
                 chord_tone = self.sample_emission(hidden_state)
                 beats.append(SkeletonEmission(chord_tone, 0, hidden_state))
-
             return beats
 
         sampled_chord_function_beat_duration = []
@@ -270,6 +270,7 @@ class HMM:
         # Force first state to be 'I'
         prev_prev_state = 'I'
         print('I')
+        print(f'yeetics: {self.duration_matrix}')
         current_state_duration = self.sample_hidden_state_duration(prev_prev_state)
         sampled_chord_function_beat_duration.append((prev_prev_state, current_state_duration))
         sampled_beats.extend(sample_beats(prev_prev_state, current_state_duration))
@@ -280,11 +281,10 @@ class HMM:
         sampled_chord_function_beat_duration.append((prev_state, current_state_duration))
         sampled_beats.extend(sample_beats(prev_state, current_state_duration))
 
-        while len(sampled_chord_function_beat_duration) < num_samples:
+        while len(sampled_beats) < num_beats:
             # Sample next hidden state and emission.
             current_state = self.sample_next_hidden_state(prev_prev_state, prev_state)
 
-            print(f'current chord: {current_state}')
             current_state_duration = self.sample_hidden_state_duration(current_state)
 
             sampled_chord_function_beat_duration.append((current_state, current_state_duration))
@@ -293,7 +293,7 @@ class HMM:
             prev_prev_state = prev_state
             prev_state = current_state
 
-        return sampled_beats
+        return sampled_beats[:num_beats]
 
     def get_hidden_states(self):
         return list(self.transition_matrix.keys())
