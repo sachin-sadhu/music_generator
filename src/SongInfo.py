@@ -226,7 +226,7 @@ class TrainingDataProcessedInfo:
                 note_offset = curr_note_midi_pitch - prev_note_midi_pitch
                 note_duration = ornament_notes[i].get_duration()
 
-                ornament_note = OrnamentNote(note_role, note_offset, note_duration)
+                ornament_note = OrnamentNote(note_role, note_offset)
                 processed_ornament_notes.append(ornament_note)
 
             ornament_grouping = OrnamentGrouping(skeleton_one, skeleton_two, processed_ornament_notes, chord_function)

@@ -4,7 +4,6 @@ from ChordFunctions import *
 from HMM import HMM
 from SecondLayerHMM import Generator
 from Timings import KeyTiming
-from Rhythm import RhythmMC
 
 def notes_to_midi(notes, filename='a_fuck this.mid', bpm=80):
     CHORD_TEMPLATES = {
@@ -203,11 +202,11 @@ def postprocess_melody(notes, key_name):
     return cleaned_notes
 
 if __name__ == "__main__":
-    directory = "/cs/home/slzys1/Documents/music_generator/POP909"
+    directory = "/home/sachin/Documents/music_generator/short_test_data"
     data = TrainingDataProcessedInfo()
     data.load_training_data(directory)
-
-    rhythm_mc = RhythmMC(data.notes)
+    
+    print(f'notes: {data.notes}')
 
     chord_beat_hmm = HMM()
     chord_beat_hmm.train_model(data.notes, data.beat_chords)
@@ -217,13 +216,15 @@ if __name__ == "__main__":
 
     ornament_hmms.print_stats()
 
-    song = Generator(chord_beat_hmm, ornament_hmms, rhythm_mc)
+    song = Generator('A:maj', chord_beat_hmm, ornament_hmms, [1,2,2,2,1,2,2,2,1,2,2,2,1,2,2,2,1,2,2,2])
     key = KeyTiming('A:maj')
     melody_sequence = song.generate(key)
-    cleaned_melody = postprocess_melody(melody_sequence, key)
-    print(cleaned_melody)
+    print(melody_sequence)
 
-    notes_to_midi(cleaned_melody)
+    #cleaned_melody = postprocess_melody(melody_sequence, key)
+    #print(cleaned_melody)
+
+    #notes_to_midi(cleaned_melody)
         #converted_notes = []
     #beat_counter = 0
     #for count, note in enumerate(sequence):
