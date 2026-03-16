@@ -67,7 +67,6 @@ def train_model(training_data, validation_data, num_hidden_states, n_iter, tol=1
 def find_best_num_hidden_states(sequences):
     hidden_state_candidates = [3,4,5,6]
 
-
     kf = KFold(n_splits=5, shuffle=True, random_state=4)
     num_hidden_states_avg_log_likelihood = {}
 
@@ -102,14 +101,6 @@ def find_best_num_hidden_states(sequences):
 
     return current_best_num_hidden_states, current_best_log_likelihood
     
-    
-
-
-
-
-
-
-
 if __name__ == "__main__":
     rhythm_1 = extract_rhythm_sequence("./POP909/001/001.mid")
     rhythm_2 = extract_rhythm_sequence("./POP909/002/002.mid")

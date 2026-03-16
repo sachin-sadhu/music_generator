@@ -8,7 +8,6 @@ if TYPE_CHECKING:
 from collections import defaultdict
 from Note import OrnamentGrouping, GeneratedNote
 from ChordFunctions import get_chord_name_in_original_key
-from Rhythm import RhythmMC
 import numpy as np
 
 class Generator:
