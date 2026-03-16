@@ -9,15 +9,16 @@ from collections import defaultdict
 from Note import OrnamentGrouping, GeneratedNote
 from ChordFunctions import get_chord_name_in_original_key
 from SongInfo import KeyTiming
+from HMM import SkeletonEmission
+import pretty_midi
 import numpy as np
 
 class Generator:
-    def __init__(self, key, chord_progression_hmm: HMM, ornament_hmms: OrnamentNoteHMMs, rhythm_sequence):
+    def __init__(self, chord_progression_hmm: HMM, ornament_hmms: OrnamentNoteHMMs, rhythm_sequence):
         self.chord_progression_hmm = chord_progression_hmm
         self.ornament_note_hmm = ornament_hmms
         self.rhythm_sequence = rhythm_sequence
         self.fixed_ornament_note_pitches = {}
-        self.key = key
 
     def generate(self, key) -> list[GeneratedNote]:
         subdivisions = 4
@@ -26,7 +27,9 @@ class Generator:
         seconds_per_step = seconds_per_beat / subdivisions
 
         melody = []
-        sampled_beats = self.chord_progression_hmm.generate(5)
+        #sampled_beats = self.chord_progression_hmm.generate(4)
+        sampled_beats = [SkeletonEmission('root',0, 'I'), SkeletonEmission('root',0, 'I'), SkeletonEmission('root',0, 'I'), SkeletonEmission('root',0, 'I')]
+        print(sampled_beats)
 
         i = 0
         while i < len(self.rhythm_sequence):
@@ -56,35 +59,39 @@ class Generator:
                     # Sustaining previous note or rest on this strong beat
                     if sampled_beats:
                         sampled_beats.pop(0)
-
-
             else:
                 # need an ornament note first check to see whether we need to generate a new note or note
                 if self.rhythm_sequence[i] == 1:
                     # check to see if ornament note pitch has already been decided
                     if i in self.fixed_ornament_note_pitches:
-                        midi_pitch = self.fixed_ornament_note_pitches[i].calc_midi_pitch(self.key)
+                        midi_pitch = self.fixed_ornament_note_pitches[i].calc_midi_pitch(key)
                         chord_function = self.fixed_ornament_note_pitches[i].chord_function
                     else:
-                        previous_skeleton_note = self.find_previous_skeleton_note(i, melody)
-                        previous_skeleton_note_pitch = previous_skeleton_note['pitch']
-                        previous_skeleton_note_chord_function = previous_skeleton_note['chord_function']
 
-                        next_skeleton_note = self.find_next_skeleton_note(i, sampled_beats)
-                        print(f'next skeleton ntoe: {next_skeleton_note}')
-                        next_skeleton_note_pitch = next_skeleton_note.calc_midi_pitch(KeyTiming("A:maj"))
-                        next_skeleton_note_chord_function = next_skeleton_note.chord_function
+                        try:
+                            previous_skeleton_note = self.find_previous_skeleton_note(i, melody)
+                            previous_skeleton_note_pitch = previous_skeleton_note['pitch']
+                            previous_skeleton_note_chord_function = previous_skeleton_note['chord_function']
+                            next_skeleton_note_pitch, _ = self.find_next_skeleton_note(i, sampled_beats, key)
+                        except Exception:
+                            # Default to 0 offset and setting previous chord function to 'I'
+                            next_skeleton_note_pitch = 0
+                            previous_skeleton_note_pitch = 0
+                            previous_skeleton_note_chord_function = 'I'
 
-                        offset = previous_skeleton_note_pitch - next_skeleton_note_pitch 
-                        chord_function = previous_skeleton_note_chord_function
-                        ornament_note = self.ornament_note_hmm.generate_sequence(offset, chord_function)[0]
-                        midi_pitch = melody[-1]['pitch'] + ornament_note.offset
+                        # Check if this note is the note that sutains onto the next strong beat note
+                        if i in self.fixed_ornament_note_pitches:
+                            midi_pitch = self.fixed_ornament_note_pitches[i].calc_midi_pitch(key)
+                            chord_function = self.fixed_ornament_note_pitches[i].chord_function
+                        else:
+                            offset = previous_skeleton_note_pitch - next_skeleton_note_pitch 
+                            chord_function = previous_skeleton_note_chord_function
+                            ornament_note = self.ornament_note_hmm.generate_sequence(offset, chord_function)[0]
+                            midi_pitch = melody[-1]['pitch'] + ornament_note.offset
 
                     end_index = i + 1
                     while (end_index < len(self.rhythm_sequence) and self.rhythm_sequence[end_index] == 2):
                         end_index += 1
-
-                    end_time = end_index * seconds_per_step
 
                     note = {
                         'pitch': midi_pitch,
@@ -92,13 +99,25 @@ class Generator:
                         'end': end_index,
                         'chord_function': chord_function
                     }
-
+                    melody.append(note)
             i += 1
+
+        midi_notes = []
+        for note in melody:
+            processed_note = pretty_midi.Note(
+                velocity=80,
+                pitch=note['pitch'],
+                start=note['start'] * seconds_per_step,
+                end=note['end'] * seconds_per_step
+            )
+            midi_notes.append(processed_note)
+
+        return midi_notes
 
     """
         Returns the pitch and chord function of the next skeleton note
     """
-    def find_next_skeleton_note(self, current_index, skeleton_notes):
+    def find_next_skeleton_note(self, current_index, skeleton_notes, key):
         # first find out index of next skeleton note
         next_strong_beat_index = current_index + 1
         found_strong_beat = False
@@ -110,7 +129,7 @@ class Generator:
                 next_strong_beat_index += 1
 
         if not found_strong_beat:
-            return None
+            raise ValueError("no next strong beat found")
 
         # Note being generated at the strong beat
         if self.rhythm_sequence[next_strong_beat_index] == 1:
@@ -123,12 +142,11 @@ class Generator:
                     break
                 else:
                     sustained_note_index -= 1
-        
-            # what happens if the note that sustains it is actually the previous skeleton note
-
             self.fixed_ornament_note_pitches[sustained_note_index] = skeleton_notes[0]
+        else:
+            raise ValueError("rest being played at skeleton note.")
         
-        pitch = skeleton_notes[0].calc_midi_pitch('key')
+        pitch = skeleton_notes[0].calc_midi_pitch(key)
         chord_function = skeleton_notes[0].chord_function
 
         return pitch, chord_function
@@ -153,7 +171,7 @@ class Generator:
                 recent_strong_beat_index -= 1
 
         if not found_strong_beat:
-            return None
+            raise ValueError("no previous skeleton note found")
 
         # Check if this strong beat was a 1 (new note) or 2 (sustained pitch from previous note)
         if self.rhythm_sequence[recent_strong_beat_index] == 1:
@@ -173,38 +191,11 @@ class Generator:
                     recent_new_note_index -= 1
             
             if not found_new_note:
-                return None
+                raise ValueError("no previous skeleton note found")
             
             for note in reversed(current_melody):
-                if note['start'] == recent_strong_beat_index:
+                if note['start'] == recent_new_note_index:
                     return note
-
-        return None
-
-        sampled_beats: list = self.chord_progression_hmm.generate()
-        print(sampled_beats)
-        for i in range(len(sampled_beats)-1):
-            beat_1_pitch = sampled_beats[i].calc_midi_pitch(key)
-            beat_2_pitch = sampled_beats[i+1].calc_midi_pitch(key)
-            offset = beat_1_pitch - beat_2_pitch
-            chord_function = sampled_beats[i].chord_function
-            note_chord = get_chord_name_in_original_key(chord_function, key)
-
-            ornament_notes = self.ornament_note_hmm.generate_sequence(offset, chord_function, self.rhythm_mc)
-
-            full_sequence.append(GeneratedNote(beat_1_pitch, skeleton_notes_beat_duration, note_chord))
-            for ornament_note in ornament_notes:
-                midi_pitch = full_sequence[-1].midi_pitch + ornament_note.offset
-                duration = ornament_note.duration
-                full_sequence.append(GeneratedNote(midi_pitch, duration, note_chord))
-            full_sequence.append(GeneratedNote(beat_2_pitch, skeleton_notes_beat_duration, note_chord))
-
-        final_note_pitch = sampled_beats[-1].calc_midi_pitch(key)
-        chord_function = sampled_beats[-1].chord_function
-        note_chord = get_chord_name_in_original_key(chord_function, key)
-        full_sequence.append(GeneratedNote(final_note_pitch, skeleton_notes_beat_duration, note_chord))
-
-        return full_sequence
 
 class OrnamentEmission:
     def __init__(self, offset):

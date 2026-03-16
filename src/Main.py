@@ -202,7 +202,7 @@ def postprocess_melody(notes, key_name):
     return cleaned_notes
 
 if __name__ == "__main__":
-    directory = "/home/sachin/Documents/music_generator/short_test_data"
+    directory = "/cs/home/slzys1/Documents/music_generator/short_test_data"
     data = TrainingDataProcessedInfo()
     data.load_training_data(directory)
     
@@ -216,10 +216,19 @@ if __name__ == "__main__":
 
     ornament_hmms.print_stats()
 
-    song = Generator('A:maj', chord_beat_hmm, ornament_hmms, [1,2,2,2,1,2,2,2,1,2,2,2,1,2,2,2,1,2,2,2])
+    song = Generator(chord_beat_hmm, ornament_hmms, [1,2,3,1,1,2,2,2,2,1,2,2,2,2,2,2])
     key = KeyTiming('A:maj')
-    melody_sequence = song.generate(key)
-    print(melody_sequence)
+    melody = song.generate(key)
+
+    # Create MIDI file
+    midi = pretty_midi.PrettyMIDI()
+    instrument = pretty_midi.Instrument(program=1)  # Piano
+    instrument.notes.extend(melody)
+    midi.instruments.append(instrument)
+    
+    # Save MIDI file
+    midi.write('booticus.mid')
+    print(f"midi saved")
 
     #cleaned_melody = postprocess_melody(melody_sequence, key)
     #print(cleaned_melody)
