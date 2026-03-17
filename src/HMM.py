@@ -249,7 +249,7 @@ class HMM:
         self.duration_matrix = self.calc_hidden_state_duration_matrix(beat_chords_dict)
         self.emission_matrix = self.calc_emission_state_transition_matrix(song_notes_dict)
 
-    def generate(self, num_beats=5):
+    def generate(self):
         def sample_beats(hidden_state, num_beats):
             print(f'Sampling {num_beats} for chord {hidden_state}')
             beats = []

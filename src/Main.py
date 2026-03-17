@@ -1,9 +1,11 @@
 from music21 import stream, note, tempo, instrument, chord
+import numpy as np
 from Preprocessing import *
 from ChordFunctions import *
 from HMM import HMM
 from SecondLayerHMM import Generator
 from Timings import KeyTiming
+from Rhythm import *
 
 def notes_to_midi(notes, filename='a_fuck this.mid', bpm=80):
     CHORD_TEMPLATES = {
@@ -129,10 +131,12 @@ def fill_chord_triad(notes, key):
 
     print(chord_tones)
 
-def postprocess_melody(notes, key_name):
+def postprocess_melody(notes, key):
     """
     Clean up generated melody by avoiding really bad notes.
     """
+
+    key_name = key.name
     # Define key scales (notes to keep)
     KEY_SCALES = {
         'A:maj': [9, 11, 1, 2, 4, 6, 8],      # A, B, C#, D, E, F#, G#
@@ -156,25 +160,21 @@ def postprocess_melody(notes, key_name):
     allowed_notes = set(KEY_SCALES[key_name])
     tritone = TRITONES.get(key_name)
     
-    cleaned_notes = []
-    
     for note in notes:
-        pitch_class = note.midi_pitch % 12  # Get note within one octave
+        pitch_class = note['pitch'] % 12  # Get note within one octave
         
-        # Check if it's the dreaded tritone
+        # Check if its tritone
         if pitch_class == tritone:
             # Move tritone to nearest safe note
             if tritone + 1 in allowed_notes:
-                corrected_pitch = note.midi_pitch + 1
+                corrected_pitch = note['pitch'] + 1
             elif tritone - 1 in allowed_notes:
-                corrected_pitch = note.midi_pitch - 1
+                corrected_pitch = note['pitch'] - 1
             else:
-                corrected_pitch = note.midi_pitch + 2  # Fallback
+                corrected_pitch = note['pitch'] + 2  # Fallback
             
-            # Create corrected note
-            corrected_note = GeneratedNote(corrected_pitch, note.duration, note.chord)
-            cleaned_notes.append(corrected_note)
-            print(f"Fixed tritone: {note.midi_pitch} -> {corrected_pitch}")
+            print(f"Fixed tritone: {note['pitch']} -> {corrected_pitch}")
+            note['pitch'] = corrected_pitch
             
         # Check if it's outside the key scale
         elif pitch_class not in allowed_notes:
@@ -191,22 +191,37 @@ def postprocess_melody(notes, key_name):
                 if pitch_adjustment < 0:
                     pitch_adjustment = -pitch_adjustment
                     
-            corrected_pitch = note.midi_pitch + pitch_adjustment
-            corrected_note = GeneratedNote(corrected_pitch, note.duration, note.chord)
-            cleaned_notes.append(corrected_note)
-            print(f"Fixed chromatic note: {note.midi_pitch} -> {corrected_pitch}")
-        else:
-            # Note is fine, keep it
-            cleaned_notes.append(note)
-    
-    return cleaned_notes
+            corrected_pitch = note['pitch'] + pitch_adjustment
+            note['pitch'] = corrected_pitch
+            print(f"Fixed chromatic note: {note['pitch']} -> {corrected_pitch}")
 
 if __name__ == "__main__":
-    directory = "/cs/home/slzys1/Documents/music_generator/short_test_data"
+    directory = "/home/sachin/Documents/music_generator/POP909/POP909"
     data = TrainingDataProcessedInfo()
     data.load_training_data(directory)
     
     print(f'notes: {data.notes}')
+
+    rhythm_1 = extract_rhythm_sequence("./POP909/POP909/001/001.mid")
+    rhythm_2 = extract_rhythm_sequence("./POP909/POP909/002/002.mid")
+    rhythm_3 = extract_rhythm_sequence("./POP909/POP909/003/003.mid")
+    rhythm_4 = extract_rhythm_sequence("./POP909/POP909/004/004.mid")
+    rhythm_5 = extract_rhythm_sequence("./POP909/POP909/005/005.mid")
+    rhythm_6 = extract_rhythm_sequence("./POP909/POP909/006/006.mid")
+    rhythm_7 = extract_rhythm_sequence("./POP909/POP909/007/007.mid")
+    rhythm_8 = extract_rhythm_sequence("./POP909/POP909/008/008.mid")
+    rhythm_9 = extract_rhythm_sequence("./POP909/POP909/009/009.mid")
+    rhythm_10 = extract_rhythm_sequence("./POP909/POP909/010/010.mid")
+    rhythm_11 = extract_rhythm_sequence("./POP909/POP909/011/011.mid")
+    rhythm_12 = extract_rhythm_sequence("./POP909/POP909/012/012.mid")
+    rhythm_13 = extract_rhythm_sequence("./POP909/POP909/013/013.mid")
+    rhythm_14 = extract_rhythm_sequence("./POP909/POP909/014/014.mid")
+    rhythm_15 = extract_rhythm_sequence("./POP909/POP909/015/015.mid")
+
+    rhythm_16 = extract_rhythm_sequence("./POP909/POP909/016/016.mid")
+
+    sequences = [rhythm_1, rhythm_2, rhythm_3, rhythm_4, rhythm_5, rhythm_6, rhythm_7, rhythm_8, rhythm_9, rhythm_10]
+    validation_data = [rhythm_16]
 
     chord_beat_hmm = HMM()
     chord_beat_hmm.train_model(data.notes, data.beat_chords)
@@ -216,19 +231,61 @@ if __name__ == "__main__":
 
     ornament_hmms.print_stats()
 
-    song = Generator(chord_beat_hmm, ornament_hmms, [1,2,3,1,1,2,2,2,2,1,2,2,2,2,2,2])
-    key = KeyTiming('A:maj')
-    melody = song.generate(key)
+    model, _ = train_model(sequences, validation_data, 8, n_iter=200)
 
-    # Create MIDI file
-    midi = pretty_midi.PrettyMIDI()
-    instrument = pretty_midi.Instrument(program=1)  # Piano
-    instrument.notes.extend(melody)
-    midi.instruments.append(instrument)
-    
-    # Save MIDI file
-    midi.write('booticus.mid')
-    print(f"midi saved")
+    X, _ = model.sample(256)
+    while (np.all(X == 3)):
+        X, _ = model.sample(256)
+    X = X.flatten().tolist()
+
+    print(f'rhythm: {X}')
+
+    song = Generator(chord_beat_hmm, ornament_hmms, X)
+    key = KeyTiming('D:maj')
+    melody = song.generate(key)
+    print(f'melody: {melody}')
+    postprocess_melody(melody, key)
+
+    score = stream.Score()
+
+    # Treble clef part
+    treble = stream.Part()
+    treble.append(instrument.Piano())
+    treble.append(tempo.MetronomeMark(number=120))
+
+    # Bass clef part
+    bass = stream.Part()
+    bass.append(instrument.Piano())
+
+    for i in range(len(melody)-1):
+        curr_note = melody[i]
+        pitch = curr_note['pitch']
+        n = note.Note(pitch)
+        duration = curr_note['end'] - curr_note['start']
+        n.quarterLength = duration / 4  # Duration in quarter notes
+        treble.append(n)
+
+        next_note = melody[i+1]
+        if next_note['start'] != curr_note['end']:
+            # Need a rest!
+            rest_duration = next_note['start'] - curr_note['end']
+            print(f'need a rest: {rest_duration}')
+            r = note.Rest()
+            r.quarterLength = rest_duration / 4
+            treble.append(r)
+
+    # Need to add last note
+    last_note = melody[-1]
+    pitch = last_note['pitch']
+    n = note.Note(pitch)
+    duration = last_note['end'] - last_note['start']
+    n.quarterLength = duration / 4  # Duration in quarter notes
+    treble.append(n)
+
+    score.append(treble)
+    score.append(bass)
+    score.write('midi', fp='asdfjaslkj.mid')
+    score.write('lilypond.pdf', fp='brutica')
 
     #cleaned_melody = postprocess_melody(melody_sequence, key)
     #print(cleaned_melody)

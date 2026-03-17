@@ -27,9 +27,9 @@ class Generator:
         seconds_per_step = seconds_per_beat / subdivisions
 
         melody = []
-        #sampled_beats = self.chord_progression_hmm.generate(4)
-        sampled_beats = [SkeletonEmission('root',0, 'I'), SkeletonEmission('root',0, 'I'), SkeletonEmission('root',0, 'I'), SkeletonEmission('root',0, 'I')]
+        sampled_beats = self.chord_progression_hmm.generate(64)
         print(sampled_beats)
+        print(len(self.rhythm_sequence))
 
         i = 0
         while i < len(self.rhythm_sequence):
@@ -45,6 +45,7 @@ class Generator:
 
                     # Skeleton note
                     # create MIDI note
+                    print(f'popping from skeleton note. current length of skeleton note array: {len(sampled_beats)}')
                     skeleton_note = sampled_beats.pop(0)
                     midi_pitch = skeleton_note.calc_midi_pitch(key)
                     chord_function = skeleton_note.chord_function
@@ -75,8 +76,8 @@ class Generator:
                             next_skeleton_note_pitch, _ = self.find_next_skeleton_note(i, sampled_beats, key)
                         except Exception:
                             # Default to 0 offset and setting previous chord function to 'I'
-                            next_skeleton_note_pitch = 0
-                            previous_skeleton_note_pitch = 0
+                            next_skeleton_note_pitch = 60
+                            previous_skeleton_note_pitch = 60
                             previous_skeleton_note_chord_function = 'I'
 
                         # Check if this note is the note that sutains onto the next strong beat note
@@ -87,7 +88,10 @@ class Generator:
                             offset = previous_skeleton_note_pitch - next_skeleton_note_pitch 
                             chord_function = previous_skeleton_note_chord_function
                             ornament_note = self.ornament_note_hmm.generate_sequence(offset, chord_function)[0]
-                            midi_pitch = melody[-1]['pitch'] + ornament_note.offset
+                            if len(melody) > 0:
+                                midi_pitch = melody[-1]['pitch'] + ornament_note.offset
+                            else:
+                                midi_pitch = previous_skeleton_note_pitch
 
                     end_index = i + 1
                     while (end_index < len(self.rhythm_sequence) and self.rhythm_sequence[end_index] == 2):
@@ -102,17 +106,7 @@ class Generator:
                     melody.append(note)
             i += 1
 
-        midi_notes = []
-        for note in melody:
-            processed_note = pretty_midi.Note(
-                velocity=80,
-                pitch=note['pitch'],
-                start=note['start'] * seconds_per_step,
-                end=note['end'] * seconds_per_step
-            )
-            midi_notes.append(processed_note)
-
-        return midi_notes
+        return melody
 
     """
         Returns the pitch and chord function of the next skeleton note

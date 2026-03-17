@@ -221,9 +221,7 @@ if __name__ == "__main__":
     print(model.monitor_)
     print(loglikelihood / (len(validation_data) * len(rhythm_16)))
     X, Z = model.sample(256)
-
-    print(X)
-    convert_rhythm_to_midi(X, "broticus.mid")
+    print(X.flatten().tolist())
 
     
 
