@@ -215,32 +215,9 @@ def postprocess_melody(notes, key):
             print(f"Fixed chromatic note: {note['pitch']} -> {corrected_pitch}")
 
 if __name__ == "__main__":
-    directory = "/cs/home/slzys1/Documents/music_generator/POP909"
+    directory = "/home/sachin/Documents/music_generator/POP909/POP909"
     data = TrainingDataProcessedInfo()
     data.load_training_data(directory)
-    
-    print(f'notes: {data.notes}')
-
-    rhythm_1 = extract_rhythm_sequence("./POP909/001/001.mid")
-    rhythm_2 = extract_rhythm_sequence("./POP909/002/002.mid")
-    rhythm_3 = extract_rhythm_sequence("./POP909/003/003.mid")
-    rhythm_4 = extract_rhythm_sequence("./POP909/004/004.mid")
-    rhythm_5 = extract_rhythm_sequence("./POP909/005/005.mid")
-    rhythm_6 = extract_rhythm_sequence("./POP909/006/006.mid")
-    rhythm_7 = extract_rhythm_sequence("./POP909/007/007.mid")
-    rhythm_8 = extract_rhythm_sequence("./POP909/008/008.mid")
-    rhythm_9 = extract_rhythm_sequence("./POP909/009/009.mid")
-    rhythm_10 = extract_rhythm_sequence("./POP909/010/010.mid")
-    rhythm_11 = extract_rhythm_sequence("./POP909/011/011.mid")
-    rhythm_12 = extract_rhythm_sequence("./POP909/012/012.mid")
-    rhythm_13 = extract_rhythm_sequence("./POP909/013/013.mid")
-    rhythm_14 = extract_rhythm_sequence("./POP909/014/014.mid")
-    rhythm_15 = extract_rhythm_sequence("./POP909/015/015.mid")
-
-    rhythm_16 = extract_rhythm_sequence("./POP909/016/016.mid")
-
-    sequences = [rhythm_1, rhythm_2, rhythm_3, rhythm_4, rhythm_5, rhythm_6, rhythm_7, rhythm_8, rhythm_9, rhythm_10]
-    validation_data = [rhythm_16]
 
     chord_beat_hmm = HMM()
     chord_beat_hmm.train_model(data.notes, data.beat_chords)
@@ -248,19 +225,17 @@ if __name__ == "__main__":
     ornament_hmms = OrnamentNoteHMMs(data.ornament_groupings)
     ornament_hmms.train_hmms()
 
-    ornament_hmms.print_stats()
-
-    model, _ = train_model(sequences, validation_data, 8, n_iter=200)
+    model = load_model('rhythm_model.pkl')
 
     X, _ = model.sample(256)
-    while (np.all(X == 3)):
+    while (np.all(X == 2)):
         X, _ = model.sample(256)
     X = X.flatten().tolist()
 
     print(f'rhythm: {X}')
 
     song = Generator(chord_beat_hmm, ornament_hmms, X)
-    key = KeyTiming('D:maj')
+    key = KeyTiming('A:maj')
     melody, sampled_beats = song.generate(key)
     print(f'melody: {melody}')
 
@@ -271,7 +246,7 @@ if __name__ == "__main__":
     # Treble clef part
     treble = stream.Part()
     treble.append(instrument.Piano())
-    treble.append(tempo.MetronomeMark(number=120))
+    treble.append(tempo.MetronomeMark(number=80))
 
     # Bass clef part
     bass = stream.Part()
@@ -361,7 +336,7 @@ if __name__ == "__main__":
 
     score.append(treble)
     score.append(bass)
-    score.write('midi', fp='g_maj2.mid')
+    score.write('midi', fp='poloo.mid')
     #score.write('lilypond.pdf', fp='mmb')
 
     #cleaned_melody = postprocess_melody(melody_sequence, key)

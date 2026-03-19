@@ -2,6 +2,31 @@ import pretty_midi
 import numpy as np
 from hmmlearn import hmm
 from sklearn.model_selection import KFold
+import pickle
+import os
+
+def save_model(filename, model):
+    with open(filename, 'wb') as file:
+        pickle.dump(model, file)
+    print(f'successfully saved model to {filename}')
+
+def load_model(filename):
+    print('loading model...')
+    with open(filename, 'rb') as file:
+        model = pickle.load(file)
+    print('model loaded...')
+    return model
+
+def preprocess_rhythm_sequence(sequence):
+    start_index = 0
+    while start_index < len(sequence) and sequence[start_index] == 2:
+        start_index += 1
+
+    end_index = len(sequence) - 1
+    while end_index >= 0 and sequence[end_index] == 2:
+        end_index -=1
+
+    return sequence[start_index:end_index+1]
 
 def extract_rhythm_sequence(midi_path, beats_per_bar=4, subdivisions=4, n_bars=16):
     """
@@ -34,17 +59,18 @@ def extract_rhythm_sequence(midi_path, beats_per_bar=4, subdivisions=4, n_bars=1
         offset_index = np.argmin(np.abs(np.array(grid) - note.end))
         notes.append((onset_index, offset_index))
 
-    sequence = np.full(m, 3) # default is silence
+    sequence = np.full(m, 2) # default is silence
 
     for onset_index, offset_index, in notes:
         if onset_index < m:
-            sequence[onset_index] = 1 # note starting
+            sequence[onset_index] = 0 # note starting
             for t in range(onset_index + 1, min(offset_index, m)):
-                sequence[t] = 2 # sustatin note
+                sequence[t] = 1 # sustatin note
 
     return sequence
 
 def train_model(training_data: list[list[int]], validation_data, num_hidden_states, n_iter, tol=1e-7):
+    print('training model...')
     best_model = None
     best_log_likelihood = -np.inf
 
@@ -56,16 +82,18 @@ def train_model(training_data: list[list[int]], validation_data, num_hidden_stat
     validation_data_collapsed = validation_data_collapsed.reshape(-1 ,1)
     validation_data_lengths = [len(sequence) for sequence in validation_data]
 
-    for _ in range(10):
+    for i in range(10):
+        print(f'running iteration: {i}...')
         model = hmm.CategoricalHMM(
             n_components=num_hidden_states,
             n_iter=n_iter,
-            random_state=None,
+            random_state=42+i,
             tol=tol
         )
         model.fit(training_data_collapsed, lengths)
 
         val_log_likelihood = model.score(validation_data_collapsed, validation_data_lengths)
+        print(f'iteration complete. log_likelihood on validation set: {val_log_likelihood}')
 
         if val_log_likelihood > best_log_likelihood:
             best_log_likelihood = val_log_likelihood
@@ -74,13 +102,14 @@ def train_model(training_data: list[list[int]], validation_data, num_hidden_stat
     return best_model, best_log_likelihood
 
 def find_best_num_hidden_states(sequences):
-    hidden_state_candidates = [3,4,5,6,7,8,9]
+    hidden_state_candidates = [14,16]
 
-    kf = KFold(n_splits=5, shuffle=True, random_state=None)
+    kf = KFold(n_splits=5, shuffle=True, random_state=42)
     num_hidden_states_avg_log_likelihood = {}
 
     # Run k-folds for each hidden_state candiate
     for num_hidden_states in hidden_state_candidates:
+        print(f'parameter testing: {num_hidden_states}')
         fold_log_likelihoods = []
         for train_index, validation_index in kf.split(sequences):
             print(f'training index: {train_index}')
@@ -96,11 +125,11 @@ def find_best_num_hidden_states(sequences):
 
             # For each training fold run, repeat 5 times and take best likelihood incase of bad initialisation.
             current_fold_best_log_likelihood = -np.inf
-            for _ in range(5):
+            for i in range(5):
                 model = hmm.CategoricalHMM(
                     n_components=num_hidden_states,
                     n_iter=100,
-                    random_state=None
+                    random_state=42+i
                 )
                 model.fit(training_data_collapsed, lengths)
 
@@ -112,7 +141,7 @@ def find_best_num_hidden_states(sequences):
                 if val_log_likelihood > current_fold_best_log_likelihood:
                     current_fold_best_log_likelihood = val_log_likelihood
 
-                fold_log_likelihoods.append(current_fold_best_log_likelihood)
+            fold_log_likelihoods.append(current_fold_best_log_likelihood)
 
         # Take average log-likelihood over all folds as benchmark for this parameter candidate.
         avg_log_likelihood = np.mean(fold_log_likelihoods)
@@ -192,36 +221,53 @@ def convert_rhythm_to_midi(generated_sequence, output_path, beats_per_bar=4, sub
     
     return midi
 
+def extract_sequences_from_dataset(dirpath):
+    songs_sequences = []
+    for song_dir in sorted(os.listdir(dirpath)):
+        song_path = os.path.join(dirpath, song_dir)
+
+        if not os.path.isdir(song_path):
+            continue
+
+        midi_file_path = os.path.join(song_path, f"{song_dir}.mid")
+        song_rhythm = extract_rhythm_sequence(midi_file_path)
+        songs_sequences.append(song_rhythm)
+    return songs_sequences
+
+def split_training_set_validation_set(sequences, train_ratio=0.8, val_ratio=0.1):
+    train_end = int(len(sequences) * train_ratio)
+    val_end = int(len(sequences) * (train_ratio + val_ratio))
+    training_set = sequences[:train_end]
+    validation_set = sequences[train_end:val_end]
+    testing_set = sequences[val_end:]
+    return training_set, validation_set, testing_set
 
 if __name__ == "__main__":
-    rhythm_1 = extract_rhythm_sequence("./POP909/POP909/001/001.mid")
-    rhythm_2 = extract_rhythm_sequence("./POP909/POP909/002/002.mid")
-    rhythm_3 = extract_rhythm_sequence("./POP909/POP909/003/003.mid")
-    rhythm_4 = extract_rhythm_sequence("./POP909/POP909/004/004.mid")
-    rhythm_5 = extract_rhythm_sequence("./POP909/POP909/005/005.mid")
-    rhythm_6 = extract_rhythm_sequence("./POP909/POP909/006/006.mid")
-    rhythm_7 = extract_rhythm_sequence("./POP909/POP909/007/007.mid")
-    rhythm_8 = extract_rhythm_sequence("./POP909/POP909/008/008.mid")
-    rhythm_9 = extract_rhythm_sequence("./POP909/POP909/009/009.mid")
-    rhythm_10 = extract_rhythm_sequence("./POP909/POP909/010/010.mid")
-    rhythm_11 = extract_rhythm_sequence("./POP909/POP909/011/011.mid")
-    rhythm_12 = extract_rhythm_sequence("./POP909/POP909/012/012.mid")
-    rhythm_13 = extract_rhythm_sequence("./POP909/POP909/013/013.mid")
-    rhythm_14 = extract_rhythm_sequence("./POP909/POP909/014/014.mid")
-    rhythm_15 = extract_rhythm_sequence("./POP909/POP909/015/015.mid")
+    unprocessed_song_sequences = extract_sequences_from_dataset('./test_data')
+    processed_song_sequences = [preprocess_rhythm_sequence(sequence) for sequence in unprocessed_song_sequences]
+    processed_song_sequences = [seq for seq in processed_song_sequences if len(seq) > 0]
+    training_set, validation_set, testing_set = split_training_set_validation_set(processed_song_sequences)
+    print(f'lenght of training set: {len(training_set)}')
+    print(f'lenght of validation set: {len(validation_set)}')
+    print(f'lenght of testing set: {len(testing_set)}')
 
-    rhythm_16 = extract_rhythm_sequence("./POP909/POP909/016/016.mid")
+    #optimal_num_hidden_states, _ = find_best_num_hidden_states(training_set)
+    #print(f'optimal number of hidden states: {optimal_num_hidden_states}')
 
-    sequences = [rhythm_1, rhythm_2, rhythm_3, rhythm_4, rhythm_5, rhythm_6, rhythm_7, rhythm_8, rhythm_9, rhythm_10]
-    validation_data = [rhythm_16]
+    test_data_collapsed = np.concatenate(testing_set)
+    test_data_collapsed = test_data_collapsed.reshape(-1 ,1)
+    test_data_lengths = [len(sequence) for sequence in testing_set]   
+    model, _ = train_model(training_set, validation_set, 14, n_iter=200)
+    test_score = model.score(test_data_collapsed, test_data_lengths)
 
-    #num_hidden_states = find_best_num_hidden_states(sequences)
-    #print(num_hidden_states)
-    model, loglikelihood = train_model(sequences, validation_data, 8, n_iter=200)
-    print(model.monitor_)
-    print(loglikelihood / (len(validation_data) * len(rhythm_16)))
-    X, Z = model.sample(256)
-    print(X.flatten().tolist())
+    print(f'test log-likelihood: {test_score / sum(test_data_lengths)}')
+    save_model('rhythm_model.pkl', model)
+    #print(f'original model: {model}')
+    #print(model.monitor_)
+    #print(loglikelihood / (len(validation_data) * len(rhythm_16)))
+    #model = load_model('rhythm_model.pkl')
+    #print(f'loaded model: {model}')
+    #print(model)
 
     
 

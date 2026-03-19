@@ -40,10 +40,10 @@ class Generator:
             ## Check if on strong beat position
             if i % 8 == 0:
                 ## Need to start playing a fresh note
-                if self.rhythm_sequence[i] == 1:
+                if self.rhythm_sequence[i] == 0:
                     # Check if ornament note or skeelton note
                     end_index = i + 1
-                    while (end_index < len(self.rhythm_sequence) and self.rhythm_sequence[end_index] == 2):
+                    while (end_index < len(self.rhythm_sequence) and self.rhythm_sequence[end_index] == 1):
                         end_index += 1
 
                     # Skeleton note
@@ -59,13 +59,13 @@ class Generator:
                         'chord_function': chord_function
                     }
                     melody.append(note)
-                elif self.rhythm_sequence[i] == 2 or self.rhythm_sequence[i] == 3:
+                elif self.rhythm_sequence[i] == 1 or self.rhythm_sequence[i] == 2:
                     # Sustaining previous note or rest on this strong beat
                     if sampled_beats:
                         sampled_beats.pop(0)
             else:
                 # need an ornament note first check to see whether we need to generate a new note or note
-                if self.rhythm_sequence[i] == 1:
+                if self.rhythm_sequence[i] == 0:
                     # check to see if ornament note pitch has already been decided
                     if i in self.fixed_ornament_note_pitches:
                         midi_pitch = self.fixed_ornament_note_pitches[i].calc_midi_pitch(key)
@@ -97,7 +97,7 @@ class Generator:
                                 midi_pitch = previous_skeleton_note_pitch
 
                     end_index = i + 1
-                    while (end_index < len(self.rhythm_sequence) and self.rhythm_sequence[end_index] == 2):
+                    while (end_index < len(self.rhythm_sequence) and self.rhythm_sequence[end_index] == 1):
                         end_index += 1
 
                     note = {
