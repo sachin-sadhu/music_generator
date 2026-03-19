@@ -215,29 +215,29 @@ def postprocess_melody(notes, key):
             print(f"Fixed chromatic note: {note['pitch']} -> {corrected_pitch}")
 
 if __name__ == "__main__":
-    directory = "/home/sachin/Documents/music_generator/POP909/POP909"
+    directory = "/cs/home/slzys1/Documents/music_generator/POP909"
     data = TrainingDataProcessedInfo()
     data.load_training_data(directory)
     
     print(f'notes: {data.notes}')
 
-    rhythm_1 = extract_rhythm_sequence("./POP909/POP909/001/001.mid")
-    rhythm_2 = extract_rhythm_sequence("./POP909/POP909/002/002.mid")
-    rhythm_3 = extract_rhythm_sequence("./POP909/POP909/003/003.mid")
-    rhythm_4 = extract_rhythm_sequence("./POP909/POP909/004/004.mid")
-    rhythm_5 = extract_rhythm_sequence("./POP909/POP909/005/005.mid")
-    rhythm_6 = extract_rhythm_sequence("./POP909/POP909/006/006.mid")
-    rhythm_7 = extract_rhythm_sequence("./POP909/POP909/007/007.mid")
-    rhythm_8 = extract_rhythm_sequence("./POP909/POP909/008/008.mid")
-    rhythm_9 = extract_rhythm_sequence("./POP909/POP909/009/009.mid")
-    rhythm_10 = extract_rhythm_sequence("./POP909/POP909/010/010.mid")
-    rhythm_11 = extract_rhythm_sequence("./POP909/POP909/011/011.mid")
-    rhythm_12 = extract_rhythm_sequence("./POP909/POP909/012/012.mid")
-    rhythm_13 = extract_rhythm_sequence("./POP909/POP909/013/013.mid")
-    rhythm_14 = extract_rhythm_sequence("./POP909/POP909/014/014.mid")
-    rhythm_15 = extract_rhythm_sequence("./POP909/POP909/015/015.mid")
+    rhythm_1 = extract_rhythm_sequence("./POP909/001/001.mid")
+    rhythm_2 = extract_rhythm_sequence("./POP909/002/002.mid")
+    rhythm_3 = extract_rhythm_sequence("./POP909/003/003.mid")
+    rhythm_4 = extract_rhythm_sequence("./POP909/004/004.mid")
+    rhythm_5 = extract_rhythm_sequence("./POP909/005/005.mid")
+    rhythm_6 = extract_rhythm_sequence("./POP909/006/006.mid")
+    rhythm_7 = extract_rhythm_sequence("./POP909/007/007.mid")
+    rhythm_8 = extract_rhythm_sequence("./POP909/008/008.mid")
+    rhythm_9 = extract_rhythm_sequence("./POP909/009/009.mid")
+    rhythm_10 = extract_rhythm_sequence("./POP909/010/010.mid")
+    rhythm_11 = extract_rhythm_sequence("./POP909/011/011.mid")
+    rhythm_12 = extract_rhythm_sequence("./POP909/012/012.mid")
+    rhythm_13 = extract_rhythm_sequence("./POP909/013/013.mid")
+    rhythm_14 = extract_rhythm_sequence("./POP909/014/014.mid")
+    rhythm_15 = extract_rhythm_sequence("./POP909/015/015.mid")
 
-    rhythm_16 = extract_rhythm_sequence("./POP909/POP909/016/016.mid")
+    rhythm_16 = extract_rhythm_sequence("./POP909/016/016.mid")
 
     sequences = [rhythm_1, rhythm_2, rhythm_3, rhythm_4, rhythm_5, rhythm_6, rhythm_7, rhythm_8, rhythm_9, rhythm_10]
     validation_data = [rhythm_16]
@@ -260,9 +260,10 @@ if __name__ == "__main__":
     print(f'rhythm: {X}')
 
     song = Generator(chord_beat_hmm, ornament_hmms, X)
-    key = KeyTiming('C:maj')
-    melody = song.generate(key)
+    key = KeyTiming('D:maj')
+    melody, sampled_beats = song.generate(key)
     print(f'melody: {melody}')
+
     postprocess_melody(melody, key)
 
     score = stream.Score()
@@ -276,6 +277,23 @@ if __name__ == "__main__":
     bass = stream.Part()
     bass.append(instrument.Piano())
 
+    for beat in sampled_beats:
+        print(beat)
+        chord_function = beat.chord_function
+        chord_name = get_chord_name_in_original_key(chord_function, key)
+        print(f'chord name: {chord_name}')
+        if chord_name in CHORD_TEMPLATES:
+            print(f'chord present')
+            chord_note = CHORD_TEMPLATES[chord_name]
+            #bass_pitches = [48 + tone for tone in chord_tones]
+            pitch = 48 + chord_note[0]
+            bass_note = note.Note(pitch)
+            #bass_chord = chord.Chord(bass_pitches)
+            bass_note.quarterLength = 2
+            bass.append(bass_note)
+        else:
+            print(f'chord not present')
+
     for i in range(len(melody)-1):
         curr_note = melody[i]
         pitch = curr_note['pitch']
@@ -287,12 +305,12 @@ if __name__ == "__main__":
         curr_chord = get_chord_name_in_original_key(curr_note['chord_function'], key)
         print(curr_chord)
 
-        if curr_chord in CHORD_TEMPLATES:
-            chord_tones = CHORD_TEMPLATES[curr_chord]
-            bass_pitches = [48 + tone for tone in chord_tones]
-            bass_chord = chord.Chord(bass_pitches)
-            bass_chord.quarterLength = duration / 4
-            bass.append(bass_chord)
+        #if curr_chord in CHORD_TEMPLATES:
+            #chord_tones = CHORD_TEMPLATES[curr_chord]
+            #bass_pitches = [48 + tone for tone in chord_tones]
+            #bass_chord = chord.Chord(bass_pitches)
+            #bass_chord.quarterLength = duration / 4
+            #bass.append(bass_chord)
 
         next_note = melody[i+1]
         if next_note['start'] != curr_note['end']:
@@ -302,7 +320,7 @@ if __name__ == "__main__":
             r = note.Rest()
             r.quarterLength = rest_duration / 4
             treble.append(r)
-            bass.append(r)
+            #bass.append(r)
 
         # Steady bass line - quarter note roots
         #if curr_note.chord != current_chord and curr_note.chord in CHORD_TEMPLATES:
@@ -343,8 +361,8 @@ if __name__ == "__main__":
 
     score.append(treble)
     score.append(bass)
-    score.write('midi', fp='asdfa.mid')
-    score.write('lilypond.pdf', fp='mmb')
+    score.write('midi', fp='g_maj2.mid')
+    #score.write('lilypond.pdf', fp='mmb')
 
     #cleaned_melody = postprocess_melody(melody_sequence, key)
     #print(cleaned_melody)

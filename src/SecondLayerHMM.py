@@ -20,7 +20,7 @@ class Generator:
         self.rhythm_sequence = rhythm_sequence
         self.fixed_ornament_note_pitches = {}
 
-    def generate(self, key) -> list[GeneratedNote]:
+    def generate(self, key):
         subdivisions = 4
         bpm = 120
         seconds_per_beat = 60.0 / bpm
@@ -29,8 +29,10 @@ class Generator:
         melody = []
         sampled_beats = self.chord_progression_hmm.generate(64)
         sampled_beats = sampled_beats[::2]
+        original_sampled_beats = sampled_beats.copy()
         print(sampled_beats)
         print(len(self.rhythm_sequence))
+
 
         i = 0
         while i < len(self.rhythm_sequence):
@@ -107,7 +109,7 @@ class Generator:
                     melody.append(note)
             i += 1
 
-        return melody
+        return melody, original_sampled_beats
 
     """
         Returns the pitch and chord function of the next skeleton note
