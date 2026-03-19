@@ -28,6 +28,7 @@ class Generator:
 
         melody = []
         sampled_beats = self.chord_progression_hmm.generate(64)
+        sampled_beats = sampled_beats[::2]
         print(sampled_beats)
         print(len(self.rhythm_sequence))
 

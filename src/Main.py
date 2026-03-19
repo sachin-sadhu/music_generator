@@ -7,6 +7,25 @@ from SecondLayerHMM import Generator
 from Timings import KeyTiming
 from Rhythm import *
 
+CHORD_TEMPLATES = {
+    'C:maj': [0, 4, 7],
+    'C:min': [0, 3, 7],
+    'D:min': [2, 5, 9], 
+    'D:maj': [2, 6, 9],
+    'E:min': [4, 7, 11],
+    'E:maj': [4, 8, 11],
+    'F:maj': [5, 9, 12],     # F-A-C
+    'F:min': [5, 8, 12],     # F-Ab-C
+    'G:maj': [7, 11, 14],    # G-B-D
+    'G:min': [7, 10, 14],    # G-Bb-D
+    'A:min': [9, 12, 16],    # A-C-E
+    'A:maj': [9, 13, 16],    # A-C#-E
+    'B:min': [11, 14, 18],   # B-D-F#
+    'B:maj': [11, 15, 18],   # B-D#-F#
+    'B:dim': [11, 14, 17],   # B-D-F
+    'G:7': [7, 11, 14, 17]   # G-B-D-F
+}
+
 def notes_to_midi(notes, filename='a_fuck this.mid', bpm=80):
     CHORD_TEMPLATES = {
         'C:maj': [0, 4, 7],
@@ -241,7 +260,7 @@ if __name__ == "__main__":
     print(f'rhythm: {X}')
 
     song = Generator(chord_beat_hmm, ornament_hmms, X)
-    key = KeyTiming('D:maj')
+    key = KeyTiming('C:maj')
     melody = song.generate(key)
     print(f'melody: {melody}')
     postprocess_melody(melody, key)
@@ -265,6 +284,16 @@ if __name__ == "__main__":
         n.quarterLength = duration / 4  # Duration in quarter notes
         treble.append(n)
 
+        curr_chord = get_chord_name_in_original_key(curr_note['chord_function'], key)
+        print(curr_chord)
+
+        if curr_chord in CHORD_TEMPLATES:
+            chord_tones = CHORD_TEMPLATES[curr_chord]
+            bass_pitches = [48 + tone for tone in chord_tones]
+            bass_chord = chord.Chord(bass_pitches)
+            bass_chord.quarterLength = duration / 4
+            bass.append(bass_chord)
+
         next_note = melody[i+1]
         if next_note['start'] != curr_note['end']:
             # Need a rest!
@@ -273,6 +302,36 @@ if __name__ == "__main__":
             r = note.Rest()
             r.quarterLength = rest_duration / 4
             treble.append(r)
+            bass.append(r)
+
+        # Steady bass line - quarter note roots
+        #if curr_note.chord != current_chord and curr_note.chord in CHORD_TEMPLATES:
+            ## Only play bass when chord changes
+            #root_tone = CHORD_TEMPLATES[curr_note.chord][0]  # Root note
+            #bass_pitch = 48 + root_tone
+            #bass_note = note.Note(bass_pitch)
+            #bass_note.quarterLength = 1.0  # Steady quarter note
+            #bass.append(bass_note)
+            #current_chord = curr_note.chord
+        #else:
+            ## Add rest to maintain steady rhythm
+            #rest = note.Rest()
+            #rest.quarterLength = curr_note.duration
+            #bass.append(rest)
+
+        #if curr_note.chord != current_chord and curr_note.chord in CHORD_TEMPLATES:
+            ## chord has changed
+            #chord_tones = CHORD_TEMPLATES[curr_note.chord]
+            #bass_notes = []
+            #for tone in chord_tones:
+                #bass_pitch = 48 + tone
+                #bass_notes.append(bass_pitch)
+
+            #bass_chord = chord.Chord(bass_notes)
+            #bass_chord.quarterLength = 1.0
+            #bass.append(bass_chord)
+
+            #current_chord = curr_note.chord
 
     # Need to add last note
     last_note = melody[-1]
@@ -284,8 +343,8 @@ if __name__ == "__main__":
 
     score.append(treble)
     score.append(bass)
-    score.write('midi', fp='asdfjaslkj.mid')
-    score.write('lilypond.pdf', fp='brutica')
+    score.write('midi', fp='asdfa.mid')
+    score.write('lilypond.pdf', fp='mmb')
 
     #cleaned_melody = postprocess_melody(melody_sequence, key)
     #print(cleaned_melody)
