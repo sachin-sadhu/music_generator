@@ -199,7 +199,7 @@ def convert_rhythm_to_midi(generated_sequence, output_path, beats_per_bar=4, sub
             # Create MIDI note
             note = pretty_midi.Note(
                 velocity=80,
-                pitch=pitch + (i % 10),
+                pitch=pitch,
                 start=start_time,
                 end=end_time
             )
@@ -243,31 +243,35 @@ def split_training_set_validation_set(sequences, train_ratio=0.8, val_ratio=0.1)
     return training_set, validation_set, testing_set
 
 if __name__ == "__main__":
-    unprocessed_song_sequences = extract_sequences_from_dataset('./test_data')
-    processed_song_sequences = [preprocess_rhythm_sequence(sequence) for sequence in unprocessed_song_sequences]
-    processed_song_sequences = [seq for seq in processed_song_sequences if len(seq) > 0]
-    training_set, validation_set, testing_set = split_training_set_validation_set(processed_song_sequences)
-    print(f'lenght of training set: {len(training_set)}')
-    print(f'lenght of validation set: {len(validation_set)}')
-    print(f'lenght of testing set: {len(testing_set)}')
+    #unprocessed_song_sequences = extract_sequences_from_dataset('./POP909/POP909')
+    #processed_song_sequences = [preprocess_rhythm_sequence(sequence) for sequence in unprocessed_song_sequences]
+    #processed_song_sequences = [seq for seq in processed_song_sequences if len(seq) > 0]
+    #training_set, validation_set, testing_set = split_training_set_validation_set(processed_song_sequences)
+    #print(f'lenght of training set: {len(training_set)}')
+    #print(f'lenght of validation set: {len(validation_set)}')
+    #print(f'lenght of testing set: {len(testing_set)}')
 
-    #optimal_num_hidden_states, _ = find_best_num_hidden_states(training_set)
-    #print(f'optimal number of hidden states: {optimal_num_hidden_states}')
+    ##optimal_num_hidden_states, _ = find_best_num_hidden_states(training_set)
+    ##print(f'optimal number of hidden states: {optimal_num_hidden_states}')
 
-    test_data_collapsed = np.concatenate(testing_set)
-    test_data_collapsed = test_data_collapsed.reshape(-1 ,1)
-    test_data_lengths = [len(sequence) for sequence in testing_set]   
-    model, _ = train_model(training_set, validation_set, 14, n_iter=200)
-    test_score = model.score(test_data_collapsed, test_data_lengths)
+    #test_data_collapsed = np.concatenate(testing_set)
+    #test_data_collapsed = test_data_collapsed.reshape(-1 ,1)
+    #test_data_lengths = [len(sequence) for sequence in testing_set]   
+    #model, _ = train_model(training_set, validation_set, 14, n_iter=200)
+    #test_score = model.score(test_data_collapsed, test_data_lengths)
 
-    print(f'test log-likelihood: {test_score / sum(test_data_lengths)}')
-    save_model('rhythm_model.pkl', model)
+    #print(f'test log-likelihood: {test_score / sum(test_data_lengths)}')
+    #save_model('rhythm_model.pkl', model)
     #print(f'original model: {model}')
     #print(model.monitor_)
     #print(loglikelihood / (len(validation_data) * len(rhythm_16)))
-    #model = load_model('rhythm_model.pkl')
-    #print(f'loaded model: {model}')
-    #print(model)
+    model = load_model('rhythm_model.pkl')
+    X, _ = model.sample(256)
+    X = X.flatten()
+    print(X)
+    convert_rhythm_to_midi(X, 'bloot.mid')
+
+    
 
     
 
