@@ -242,6 +242,33 @@ def split_training_set_validation_set(sequences, train_ratio=0.8, val_ratio=0.1)
     testing_set = sequences[val_end:]
     return training_set, validation_set, testing_set
 
+    """
+        generates a rhuhthm sequence, where we watn num_notes number of notes
+    keeps on generating sequences until we have at least num_notes occurences of 0
+    then, we find the num_notes occurence of 0, find the end of that sustain of that note and splice the index according to that
+    """
+def generate_rhythm_sequence(num_notes, model):
+    sampled_sequence = []
+    while sampled_sequence.count(0) < num_notes:
+        initial_state = 0
+        sequence = list(model.sample(num_notes)[0].flatten())
+        int_sequence = [int(x) for x in sequence]
+        sampled_sequence.extend(int_sequence)
+
+    #only return the rhythm for num_notes
+    num_new_notes_seen = 0
+    index = 0 
+    while (num_new_notes_seen < num_notes and index < len(sampled_sequence)):
+        # new note seen
+        if sampled_sequence[index] == 0:
+            num_new_notes_seen += 1
+        index += 1
+
+    while (index < len(sampled_sequence) and sampled_sequence[index] == 1):
+        index += 1
+
+    return sampled_sequence[:index]
+
 if __name__ == "__main__":
     #unprocessed_song_sequences = extract_sequences_from_dataset('./POP909/POP909')
     #processed_song_sequences = [preprocess_rhythm_sequence(sequence) for sequence in unprocessed_song_sequences]
@@ -254,15 +281,25 @@ if __name__ == "__main__":
     ##optimal_num_hidden_states, _ = find_best_num_hidden_states(training_set)
     ##print(f'optimal number of hidden states: {optimal_num_hidden_states}')
 
+<<<<<<< HEAD
     #test_data_collapsed = np.concatenate(testing_set)
     #test_data_collapsed = test_data_collapsed.reshape(-1 ,1)
     #test_data_lengths = [len(sequence) for sequence in testing_set]   
     #model, _ = train_model(training_set, validation_set, 14, n_iter=200)
     #test_score = model.score(test_data_collapsed, test_data_lengths)
+=======
+    test_data_collapsed = np.concatenate(testing_set)
+    test_data_collapsed = test_data_collapsed.reshape(-1 ,1)
+    test_data_lengths = [len(sequence) for sequence in testing_set]   
+    model, _ = train_model(training_set, validation_set, 14, n_iter=200)
+    test_score = model.score(test_data_collapsed, test_data_lengths)
+    save_model('rhythm_model.pkl', model)
+>>>>>>> 75329e18d485fef5d28ada56c1b94918d457e300
 
     #print(f'test log-likelihood: {test_score / sum(test_data_lengths)}')
     #save_model('rhythm_model.pkl', model)
     #print(f'original model: {model}')
+<<<<<<< HEAD
     #print(model.monitor_)
     #print(loglikelihood / (len(validation_data) * len(rhythm_16)))
     model = load_model('rhythm_model.pkl')
@@ -272,6 +309,13 @@ if __name__ == "__main__":
     convert_rhythm_to_midi(X, 'bloot.mid')
 
     
+=======
+    ##print(model.monitor_)
+    ##print(loglikelihood / (len(validation_data) * len(rhythm_16)))
+    #model = load_model('rhythm_model.pkl')
+    #print(f'loaded model: {model}')
+    #print(model)
+>>>>>>> 75329e18d485fef5d28ada56c1b94918d457e300
 
     
 
