@@ -228,8 +228,8 @@ def generate_score(key: KeyTiming, rhythm_sequence: list[int], soprano_notes: li
     while rhythm_sequence_index < len(rhythm_sequence):
         # Encountered new note
         if rhythm_sequence[rhythm_sequence_index] == 0:
-            if len(notes) > 0:
-                note_chord_tone = notes.pop(0)
+            if len(soprano_notes) > 0:
+                note_chord_tone = soprano_notes.pop(0)
             else:
                 note_chord_tone = 'root'
             
@@ -261,126 +261,128 @@ def generate_score(key: KeyTiming, rhythm_sequence: list[int], soprano_notes: li
             treble.append(rest)
 
     score.append(treble)
-    score.write('midi', fp='64yeet.mid')
+    score.write('midi', fp='noooo.mid')
     #score.write('lilypond.pdf', fp='mmb')
 
 if __name__ == "__main__":
-    #directory = "/home/sachin/Documents/music_generator/POP909/POP909"
-    #data = TrainingDataProcessedInfo()
-    #data.load_training_data(directory)
+    directory = "/home/sachin/Documents/music_generator/POP909/POP909"
+    data = TrainingDataProcessedInfo()
+    data.load_training_data(directory)
 
-    #chord_beat_hmm = HMM()
-    #chord_beat_hmm.train_model(data.notes, data.beat_chords)
+    chord_beat_hmm = HMM()
+    chord_beat_hmm.train_model(data.notes, data.beat_chords)
 
-    #ornament_hmms = OrnamentNoteHMMs(data.ornament_groupings)
-    #ornament_hmms.train_hmms()
-    back_chorals_dict = {'bwv2.6': 0,
-                        'bwv3.6': 0,
-                        'bwv5.7':0,    
-                        'bwv6.6': 0,    
-                        'bwv9.7': 0,    
-                        'bwv10.7':0,    
-                        'bwv11.6': 0,
-                        'bwv12.7': 1,
-                        'bwv14.5': 0,
-                        'bwv16.6': 0,
-                        'bwv17.7': 0,
-                        'bwv19.7': 3,
-                        'bwv25.6': 0,
-                        'bwv26.6': 0,
-                        'bwv28.6': 0,
-                        'bwv30.6': 0,
-                        'bwv32.6': 0,
-                        'bwv33.6': 0
-                        }
+    ornament_hmms = OrnamentNoteHMMs(data.ornament_groupings)
+    ornament_hmms.train_hmms()
+    #back_chorals_dict = {'bwv2.6': 0,
+                        #'bwv3.6': 0,
+                        #'bwv5.7':0,    
+                        #'bwv6.6': 0,    
+                        #'bwv9.7': 0,    
+                        #'bwv10.7':0,    
+                        #'bwv11.6': 0,
+                        #'bwv12.7': 1,
+                        #'bwv14.5': 0,
+                        #'bwv16.6': 0,
+                        #'bwv17.7': 0,
+                        #'bwv19.7': 3,
+                        #'bwv25.6': 0,
+                        #'bwv26.6': 0,
+                        #'bwv28.6': 0,
+                        #'bwv30.6': 0,
+                        #'bwv32.6': 0,
+                        #'bwv33.6': 0
+                        #}
 
-    song_phrases = {
-        'bwv2.6': [[1,9], [10,17], [18,26], [27,35], [36,44]],
-        'bwv3.6': [[1,10], [11,20], [21,29], [30,37]],
-        'bwv5.7': [[1,6], [7,12], [13,19], [20,26], [27,33], [34,40]],
-        'bwv6.6': [[1,11], [12,19], [20,30], [31,38]],
-        'bwv9.7': [[1,9], [10,20], [21,29], [30,39], [41,47]],
-        'bwv10.7': [[1,11], [12,20], [21,31], [32,46]],
-        'bwv11.6': [[1,9], [10,14], [15,25], [26,34], [35,41], [42,50]],
-        'bwv12.7': [[1,8], [9,15], [16,45], [46,52]],
-        'bwv14.5': [[1,9], [10,21], [22,27]],
-        'bwv16.6': [[1,8], [9,14], [15,20], [21,27], [28,35], [36,43]],
-        'bwv17.7': [[1,8], [9,17], [18,26], [27,33], [34,42], [43,49], [50,63], [64,71], [72,82]],
-        'bwv19.7': [[1,8], [9,15], [16,22], [23,29], [30,37], [38,45]],
-        'bwv25.6': [[1,8], [9,18], [19,25], [26,32], [33,41], [42,49]],
-        'bwv26.6': [[1,8], [9,15], [16,23], [24,31], [32,40]],
-        'bwv28.6': [[1,8], [9,14], [15,20], [21,27], [28,36], [37,43]],
-        'bwv30.6': [[1,8], [9,15], [16,22], [23,29], [30,39], [40,49]],
-        'bwv32.6': [[1,8], [9,15], [16,22], [23,29], [30,38], [39,47]],
-        'bwv33.6': [[1,11], [12,26], [27,36], [37,46], [47,55], [56,60], [61,71]],
-    }
+    #song_phrases = {
+        #'bwv2.6': [[1,9], [10,17], [18,26], [27,35], [36,44]],
+        #'bwv3.6': [[1,10], [11,20], [21,29], [30,37]],
+        #'bwv5.7': [[1,6], [7,12], [13,19], [20,26], [27,33], [34,40]],
+        #'bwv6.6': [[1,11], [12,19], [20,30], [31,38]],
+        #'bwv9.7': [[1,9], [10,20], [21,29], [30,39], [41,47]],
+        #'bwv10.7': [[1,11], [12,20], [21,31], [32,46]],
+        #'bwv11.6': [[1,9], [10,14], [15,25], [26,34], [35,41], [42,50]],
+        #'bwv12.7': [[1,8], [9,15], [16,45], [46,52]],
+        #'bwv14.5': [[1,9], [10,21], [22,27]],
+        #'bwv16.6': [[1,8], [9,14], [15,20], [21,27], [28,35], [36,43]],
+        #'bwv17.7': [[1,8], [9,17], [18,26], [27,33], [34,42], [43,49], [50,63], [64,71], [72,82]],
+        #'bwv19.7': [[1,8], [9,15], [16,22], [23,29], [30,37], [38,45]],
+        #'bwv25.6': [[1,8], [9,18], [19,25], [26,32], [33,41], [42,49]],
+        #'bwv26.6': [[1,8], [9,15], [16,23], [24,31], [32,40]],
+        #'bwv28.6': [[1,8], [9,14], [15,20], [21,27], [28,36], [37,43]],
+        #'bwv30.6': [[1,8], [9,15], [16,22], [23,29], [30,39], [40,49]],
+        #'bwv32.6': [[1,8], [9,15], [16,22], [23,29], [30,38], [39,47]],
+        #'bwv33.6': [[1,11], [12,26], [27,36], [37,46], [47,55], [56,60], [61,71]],
+    #}
 
 
-    model = load_model('rhythm_model.pkl')
-
-    song_sequences = extract_sequences_from_dataset(back_chorals_dict)
-
-    start_sections = []
-    middle_sections = []
-    end_sections = []
-
-    for song_id in song_phrases.keys():
-        current_song_phrases = song_phrases[song_id]
-        current_song_sequence = song_sequences[song_id]
-        for i, section in enumerate(current_song_phrases):
-            start_index = section[0] - 1
-            end_index = section[1] - 1
-            print(f'start index: {start_index} end_index: {end_index}')
-
-            song_notes = song_sequences[song_id]
-            section_notes = [song_notes[i] for i in range(start_index, end_index+1)]
-            # Indicates that section has ended (allows loop to exit)
-            section_notes.append('#')
-
-            if i == 0:
-                start_sections.append(section_notes)
-            elif i == len(current_song_phrases) - 1:
-                end_sections.append(section_notes)
-            else:
-                middle_sections.append(section_notes)
-
-    start_section_mc = MC()
-    start_section_mc.train_model(start_sections)
-
-    middle_section_mc = MC()
-    middle_section_mc.train_model(middle_sections)
-
-    end_section_mc = MC()
-    end_section_mc.train_model(end_sections)
-
+    rhythm_model = load_model('rhythm_model.pkl')
     num_notes = 64
-    pitch_generator = PitchGenerator(start_section_mc, middle_section_mc, end_section_mc)
-    soprano_pitches = pitch_generator.generate(num_notes)
+    rhythm = generate_rhythm_sequence(num_notes, rhythm_model)
 
-    soprano_bass_pairs = []
-    for song, soprano_track_index in back_chorals_dict.items():
-        soprano_bass_pairs.extend(create_soprano_bass_pairs(song, soprano_track_index, soprano_track_index+2))
-    soprano_bass_model = BassProbs()
-    soprano_bass_model.train_model(soprano_bass_pairs)
+    #song_sequences = extract_sequences_from_dataset(back_chorals_dict)
 
-    bass_pitches = [soprano_bass_model.get_bass_note(soprano_tone) for soprano_tone in soprano_pitches]
-    rhythm_sequence = generate_rhythm_sequence(len(soprano_pitches), model)
-    key = KeyTiming("D:maj")
-    generate_score(key, rhythm_sequence, soprano_pitches, bass_pitches)
+    #start_sections = []
+    #middle_sections = []
+    #end_sections = []
 
-    #song = Generator(chord_beat_hmm, ornament_hmms, X)
-    #key = KeyTiming('A:maj')
-    #melody, sampled_beats = song.generate(key)
-    #print(f'melody: {melody}')
+    #for song_id in song_phrases.keys():
+        #current_song_phrases = song_phrases[song_id]
+        #current_song_sequence = song_sequences[song_id]
+        #for i, section in enumerate(current_song_phrases):
+            #start_index = section[0] - 1
+            #end_index = section[1] - 1
+            #print(f'start index: {start_index} end_index: {end_index}')
+
+            #song_notes = song_sequences[song_id]
+            #section_notes = [song_notes[i] for i in range(start_index, end_index+1)]
+            ## Indicates that section has ended (allows loop to exit)
+            #section_notes.append('#')
+
+            #if i == 0:
+                #start_sections.append(section_notes)
+            #elif i == len(current_song_phrases) - 1:
+                #end_sections.append(section_notes)
+            #else:
+                #middle_sections.append(section_notes)
+
+    #start_section_mc = MC()
+    #start_section_mc.train_model(start_sections)
+
+    #middle_section_mc = MC()
+    #middle_section_mc.train_model(middle_sections)
+
+    #end_section_mc = MC()
+    #end_section_mc.train_model(end_sections)
+
+    #num_notes = 64
+    #pitch_generator = PitchGenerator(start_section_mc, middle_section_mc, end_section_mc)
+    #soprano_pitches = pitch_generator.generate(num_notes)
+
+    #soprano_bass_pairs = []
+    #for song, soprano_track_index in back_chorals_dict.items():
+        #soprano_bass_pairs.extend(create_soprano_bass_pairs(song, soprano_track_index, soprano_track_index+2))
+    #soprano_bass_model = BassProbs()
+    #soprano_bass_model.train_model(soprano_bass_pairs)
+
+    #bass_pitches = [soprano_bass_model.get_bass_note(soprano_tone) for soprano_tone in soprano_pitches]
+    #rhythm_sequence = generate_rhythm_sequence(len(soprano_pitches), model)
+    #key = KeyTiming("A:maj")
+    #generate_score(key, rhythm_sequence, soprano_pitches, bass_pitches)
+
+    song = Generator(chord_beat_hmm, ornament_hmms, rhythm)
+    key = KeyTiming('D:maj')
+    melody, sampled_beats = song.generate(key)
+    print(f'melody: {melody}')
 
     #postprocess_melody(melody, key)
 
-    #score = stream.Score()
+    score = stream.Score()
 
-    ## Treble clef part
-    #treble = stream.Part()
-    #treble.append(instrument.Piano())
-    #treble.append(tempo.MetronomeMark(number=80))
+    # Treble clef part
+    treble = stream.Part()
+    treble.append(instrument.Piano())
+    treble.append(tempo.MetronomeMark(number=80))
 
     ## Bass clef part
     #bass = stream.Part()
@@ -403,13 +405,13 @@ if __name__ == "__main__":
         #else:
             #print(f'chord not present')
 
-    #for i in range(len(melody)-1):
-        #curr_note = melody[i]
-        #pitch = curr_note['pitch']
-        #n = note.Note(pitch)
-        #duration = curr_note['end'] - curr_note['start']
-        #n.quarterLength = duration / 4  # Duration in quarter notes
-        #treble.append(n)
+    for i in range(len(melody)-1):
+        curr_note = melody[i]
+        pitch = curr_note['pitch']
+        n = note.Note(pitch)
+        duration = curr_note['end'] - curr_note['start']
+        n.quarterLength = duration / 4  # Duration in quarter notes
+        treble.append(n)
 
         #curr_chord = get_chord_name_in_original_key(curr_note['chord_function'], key)
         #print(curr_chord)
@@ -421,15 +423,15 @@ if __name__ == "__main__":
             ##bass_chord.quarterLength = duration / 4
             ##bass.append(bass_chord)
 
-        #next_note = melody[i+1]
-        #if next_note['start'] != curr_note['end']:
-            ## Need a rest!
-            #rest_duration = next_note['start'] - curr_note['end']
-            #print(f'need a rest: {rest_duration}')
-            #r = note.Rest()
-            #r.quarterLength = rest_duration / 4
-            #treble.append(r)
-            ##bass.append(r)
+        next_note = melody[i+1]
+        if next_note['start'] != curr_note['end']:
+            # Need a rest!
+            rest_duration = next_note['start'] - curr_note['end']
+            print(f'need a rest: {rest_duration}')
+            r = note.Rest()
+            r.quarterLength = rest_duration / 4
+            treble.append(r)
+            #bass.append(r)
 
         ## Steady bass line - quarter note roots
         ##if curr_note.chord != current_chord and curr_note.chord in CHORD_TEMPLATES:
@@ -460,18 +462,18 @@ if __name__ == "__main__":
 
             ##current_chord = curr_note.chord
 
-    ## Need to add last note
-    #last_note = melody[-1]
-    #pitch = last_note['pitch']
-    #n = note.Note(pitch)
-    #duration = last_note['end'] - last_note['start']
-    #n.quarterLength = duration / 4  # Duration in quarter notes
-    #treble.append(n)
+    # Need to add last note
+    last_note = melody[-1]
+    pitch = last_note['pitch']
+    n = note.Note(pitch)
+    duration = last_note['end'] - last_note['start']
+    n.quarterLength = duration / 4  # Duration in quarter notes
+    treble.append(n)
 
-    #score.append(treble)
+    score.append(treble)
     #score.append(bass)
-    #score.write('midi', fp='poloo.mid')
-    ##score.write('lilypond.pdf', fp='mmb')
+    score.write('midi', fp='asd;fljsalj.mid')
+    #score.write('lilypond.pdf', fp='mmb')
 
     ##cleaned_melody = postprocess_melody(melody_sequence, key)
     ##print(cleaned_melody)

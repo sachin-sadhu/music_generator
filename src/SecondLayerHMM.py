@@ -48,7 +48,6 @@ class Generator:
 
                     # Skeleton note
                     # create MIDI note
-                    print(f'popping from skeleton note. current length of skeleton note array: {len(sampled_beats)}')
                     skeleton_note = sampled_beats.pop(0)
                     midi_pitch = skeleton_note.calc_midi_pitch(key)
                     chord_function = skeleton_note.chord_function
@@ -235,6 +234,7 @@ class OrnamentNoteHMMs:
 
         hmm = self.hmms[(offset, chord_function)]
         sampled_sequence = hmm.generate()
+        print(f'for ({offset},{chord_function}): sampled: {sampled_sequence[0].offset} ')
         return sampled_sequence
 
 class OrnamentHMM:

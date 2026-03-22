@@ -17,7 +17,64 @@ def load_model(filename):
     print('model loaded...')
     return model
 
-def preprocess_rhythm_sequence(sequence):
+def convert_to_num_beats(sequence):
+    beat_indices_mapping = {
+        ('note', 1): 0, # semiqauver note
+        ('note', 2): 1, # quaver note
+        ('note', 4): 2, # crotchet note
+        ('note', 6): 3, # dotted crotchet note
+        ('note', 8): 4, # minim note
+        ('note', 12): 5, # dotted minim note
+        ('note', 16): 6, # semibreve note
+
+        ('rest', 1): 7, # semiqauver rest
+        ('rest', 2): 8, # quaver rest
+        ('rest', 4): 9, # crotchet rest
+        ('rest', 6): 10, # dotted crotchet rest
+        ('rest', 8): 11, # minim rest
+        ('rest', 12): 12, # dotted minim rest
+        ('rest', 16): 13 # semibreve rest
+    }
+
+    def closest_duration(kind, duration):
+        available = [d for (k, d) in beat_indices_mapping.keys() if k == kind]
+        closest_duration = min(available, key=lambda x: abs(x-duration))
+        return closest_duration
+
+    beat_sequence = []
+    leftPointer = 0
+    while leftPointer < len(sequence):
+        if sequence[leftPointer] == 0:
+            if leftPointer == len(sequence) - 1:
+                beat_sequence.append(beat_indices_mapping.get(('note', 1), 0))
+                break
+            else:
+                rightPointer = leftPointer + 1
+                while rightPointer < len(sequence) and sequence[rightPointer] == 1:
+                    rightPointer += 1
+                note_beat_duration = rightPointer - leftPointer
+                note_beat_duration = closest_duration('note', note_beat_duration)
+                beat_sequence.append(beat_indices_mapping.get(('note', note_beat_duration), 0))
+                leftPointer = rightPointer
+
+        elif sequence[leftPointer] == 2:
+            if leftPointer == len(sequence) - 1:
+                beat_sequence.append(beat_indices_mapping.get(('rest', 1), 0))
+                break
+            else:
+                rightPointer = leftPointer + 1
+                while rightPointer < len(sequence) and sequence[rightPointer] == 2:
+                    rightPointer += 1
+                rest_beat_duration = rightPointer - leftPointer
+                rest_beat_duration = closest_duration('rest', rest_beat_duration)
+                beat_sequence.append(beat_indices_mapping.get(('rest', rest_beat_duration), 0))
+                leftPointer = rightPointer
+
+        else:
+            leftPointer += 1
+    return beat_sequence
+
+def filter_out_beginning_end_rests(sequence):
     start_index = 0
     while start_index < len(sequence) and sequence[start_index] == 2:
         start_index += 1
@@ -102,7 +159,7 @@ def train_model(training_data: list[list[int]], validation_data, num_hidden_stat
     return best_model, best_log_likelihood
 
 def find_best_num_hidden_states(sequences):
-    hidden_state_candidates = [14,16]
+    hidden_state_candidates = [15, 18, 20, 23]
 
     kf = KFold(n_splits=5, shuffle=True, random_state=42)
     num_hidden_states_avg_log_likelihood = {}
@@ -157,70 +214,6 @@ def find_best_num_hidden_states(sequences):
 
     return current_best_num_hidden_states, current_best_log_likelihood
 
-def convert_rhythm_to_midi(generated_sequence, output_path, beats_per_bar=4, subdivisions=4, 
-                          bpm=120, pitch=60):
-    """
-    Convert rhythm sequence [1,2,3] back to MIDI
-    
-    Args:
-        generated_sequence: List/array of [1,2,3] values
-        output_path: Where to save the MIDI file
-        beats_per_bar: Number of beats per bar
-        subdivisions: Subdivisions per beat (4 = semiquavers)
-        bpm: Tempo in beats per minute
-        pitch: MIDI pitch for all notes (60 = middle C)
-    """
-    import pretty_midi
-    
-    # Calculate timing parameters
-    seconds_per_beat = 60.0 / bpm
-    seconds_per_step = seconds_per_beat / subdivisions
-    
-    # Create time grid
-    time_grid = []
-    for i in range(len(generated_sequence)):
-        time_grid.append(i * seconds_per_step)
-    
-    # Convert sequence to note events
-    notes = []
-    i = 0
-    while i < len(generated_sequence):
-        if generated_sequence[i] == 1:  # Note onset
-            start_time = time_grid[i]
-            
-            # Find end time by looking for end of sustain
-            end_index = i + 1
-            while (end_index < len(generated_sequence) and 
-                   generated_sequence[end_index] == 2):  # Sustain
-                end_index += 1
-            
-            end_time = time_grid[end_index - 1] + seconds_per_step
-            
-            # Create MIDI note
-            note = pretty_midi.Note(
-                velocity=80,
-                pitch=pitch,
-                start=start_time,
-                end=end_time
-            )
-            notes.append(note)
-            
-            i = end_index  # Skip past this note
-        else:
-            i += 1
-    
-    # Create MIDI file
-    midi = pretty_midi.PrettyMIDI()
-    instrument = pretty_midi.Instrument(program=1)  # Piano
-    instrument.notes.extend(notes)
-    midi.instruments.append(instrument)
-    
-    # Save MIDI file
-    midi.write(output_path)
-    print(f"MIDI saved to {output_path}")
-    
-    return midi
-
 def extract_sequences_from_dataset(dirpath):
     songs_sequences = []
     for song_dir in sorted(os.listdir(dirpath)):
@@ -248,20 +241,57 @@ def split_training_set_validation_set(sequences, train_ratio=0.8, val_ratio=0.1)
     then, we find the num_notes occurence of 0, find the end of that sustain of that note and splice the index according to that
     """
 def generate_rhythm_sequence(num_notes, model):
+    indicies_beat_mapping = {
+        0: ('note', 1), # semiqauver note
+        1: ('note', 2), # quaver note
+        2: ('note', 4), # crotchet note
+        3: ('note', 6), # dotted crotchet note
+        4: ('note', 8), # minim note
+        5: ('note', 12), # dotted minim note
+        6: ('note', 16), # semibreve note
+
+        7: ('rest', 1), # semiqauver rest
+        8: ('rest', 2), # quaver rest
+        9: ('rest', 4), # crotchet rest
+        10: ('rest', 6), # dotted crotchet rest
+        11: ('rest', 8), # minim rest
+        12: ('rest', 12), # dotted minim rest
+        13: ('rest', 16) # semibreve rest
+    }
+
     sampled_sequence = []
-    while sampled_sequence.count(0) < num_notes:
-        initial_state = 0
+    num_notes_generated = 0
+    while num_notes_generated < num_notes:
         sequence = list(model.sample(num_notes)[0].flatten())
-        int_sequence = [int(x) for x in sequence]
-        sampled_sequence.extend(int_sequence)
+        sequence = [int(x) for x in sequence]
+        sequence = [indicies_beat_mapping.get(indicies, ('note', 1)) for indicies in sequence]
+        print(sequence)
+
+        for note_type, beat_duration in sequence:
+            if note_type == 'note':
+                note_representation = 0
+                num_notes_generated += 1
+            else:
+                note_representation = 2
+
+            if beat_duration == 1:
+                sampled_sequence.append(note_representation)
+            else:
+                if note_representation == 0:
+                    sampled_sequence.append(note_representation)
+                    for _ in range(1, beat_duration):
+                        sampled_sequence.append(1)
+                else:
+                    for _ in range(beat_duration):
+                        sampled_sequence.append(2)
 
     #only return the rhythm for num_notes
-    num_new_notes_seen = 0
+    new_notes_seen = 0
     index = 0 
-    while (num_new_notes_seen < num_notes and index < len(sampled_sequence)):
+    while (new_notes_seen < num_notes and index < len(sampled_sequence)):
         # new note seen
         if sampled_sequence[index] == 0:
-            num_new_notes_seen += 1
+            new_notes_seen += 1
         index += 1
 
     while (index < len(sampled_sequence) and sampled_sequence[index] == 1):
@@ -270,9 +300,13 @@ def generate_rhythm_sequence(num_notes, model):
     return sampled_sequence[:index]
 
 if __name__ == "__main__":
-    #unprocessed_song_sequences = extract_sequences_from_dataset('./POP909/POP909')
-    #processed_song_sequences = [preprocess_rhythm_sequence(sequence) for sequence in unprocessed_song_sequences]
-    #processed_song_sequences = [seq for seq in processed_song_sequences if len(seq) > 0]
+    #unprocessed_song_sequences = extract_sequences_from_dataset('./test_data')
+    #filtered_sequence = [filter_out_beginning_end_rests(sequence) for sequence in unprocessed_song_sequences]
+    #filtered_sequence = [seq for seq in filtered_sequence if len(seq) > 0]
+    #print(filtered_sequence)
+    #processed_song_sequences = [convert_to_num_beats(sequence) for sequence in filtered_sequence]
+    #print(filtered_sequence)
+
     #training_set, validation_set, testing_set = split_training_set_validation_set(processed_song_sequences)
     #print(f'lenght of training set: {len(training_set)}')
     #print(f'lenght of validation set: {len(validation_set)}')
@@ -281,41 +315,24 @@ if __name__ == "__main__":
     ##optimal_num_hidden_states, _ = find_best_num_hidden_states(training_set)
     ##print(f'optimal number of hidden states: {optimal_num_hidden_states}')
 
-<<<<<<< HEAD
     #test_data_collapsed = np.concatenate(testing_set)
     #test_data_collapsed = test_data_collapsed.reshape(-1 ,1)
     #test_data_lengths = [len(sequence) for sequence in testing_set]   
-    #model, _ = train_model(training_set, validation_set, 14, n_iter=200)
+    #model, _ = train_model(training_set, validation_set, 20, n_iter=1000)
     #test_score = model.score(test_data_collapsed, test_data_lengths)
-=======
-    test_data_collapsed = np.concatenate(testing_set)
-    test_data_collapsed = test_data_collapsed.reshape(-1 ,1)
-    test_data_lengths = [len(sequence) for sequence in testing_set]   
-    model, _ = train_model(training_set, validation_set, 14, n_iter=200)
-    test_score = model.score(test_data_collapsed, test_data_lengths)
-    save_model('rhythm_model.pkl', model)
->>>>>>> 75329e18d485fef5d28ada56c1b94918d457e300
 
     #print(f'test log-likelihood: {test_score / sum(test_data_lengths)}')
+    #print(model.monitor_)
     #save_model('rhythm_model.pkl', model)
     #print(f'original model: {model}')
-<<<<<<< HEAD
-    #print(model.monitor_)
     #print(loglikelihood / (len(validation_data) * len(rhythm_16)))
+
     model = load_model('rhythm_model.pkl')
-    X, _ = model.sample(256)
-    X = X.flatten()
+
+    X = generate_rhythm_sequence(256, model)
     print(X)
-    convert_rhythm_to_midi(X, 'bloot.mid')
 
     
-=======
-    ##print(model.monitor_)
-    ##print(loglikelihood / (len(validation_data) * len(rhythm_16)))
-    #model = load_model('rhythm_model.pkl')
-    #print(f'loaded model: {model}')
-    #print(model)
->>>>>>> 75329e18d485fef5d28ada56c1b94918d457e300
 
     
 
