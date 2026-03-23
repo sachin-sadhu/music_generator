@@ -69,7 +69,11 @@ class Generator:
                 elif sampled_rhythm[i] == 1 or sampled_rhythm[i] == 2:
                     # Sustaining previous note or rest on this strong beat
                     if sampled_beats:
-                        sampled_beats.pop(0)
+                        skeleton_note = sampled_beats.pop(0)
+                        # Generate cooresponding bass note
+                        bass_note_chord_tone = self.bass_generator.get_bass_note(skeleton_note.note_chord_tone)
+                        bass_note_midi_pitch = SkeletonEmission(bass_note_chord_tone, 0, skeleton_note.chord_function).calc_midi_pitch(key) - 24
+                        bass.append((bass_note_midi_pitch, i))
             else:
                 # need an ornament note first check to see whether we need to generate a new note or note
                 if sampled_rhythm[i] == 0:
