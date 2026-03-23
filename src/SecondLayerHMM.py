@@ -5,45 +5,47 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from HMM import HMM
 
+from HMM import BassNoteGenerator, SkeletonEmission
 from collections import defaultdict
-from Note import OrnamentGrouping, GeneratedNote
-from ChordFunctions import get_chord_name_in_original_key
-from SongInfo import KeyTiming
-from HMM import SkeletonEmission
-import pretty_midi
+from Note import OrnamentGrouping
+from SongInfo import TrainingDataProcessedInfo
+from Rhythm import *
 import numpy as np
+import pickle
 
 class Generator:
-    def __init__(self, chord_progression_hmm: HMM, ornament_hmms: OrnamentNoteHMMs, rhythm_sequence):
+    def __init__(self, chord_progression_hmm: HMM, ornament_mcs: OrnamentNoteMCs, rhythm_model, bass_generator: BassNoteGenerator):
         self.chord_progression_hmm = chord_progression_hmm
-        self.ornament_note_hmm = ornament_hmms
-        self.rhythm_sequence = rhythm_sequence
+        self.ornament_note_mcs = ornament_mcs
+        self.rhythm_model = rhythm_model
+        self.bass_generator = bass_generator
         self.fixed_ornament_note_pitches = {}
 
-    def generate(self, key):
+    def generate(self, key, num_notes):
         subdivisions = 4
         bpm = 120
         seconds_per_beat = 60.0 / bpm
         seconds_per_step = seconds_per_beat / subdivisions
 
         melody = []
-        sampled_beats = self.chord_progression_hmm.generate(64)
-        sampled_beats = sampled_beats[::2]
-        original_sampled_beats = sampled_beats.copy()
-        print(sampled_beats)
-        print(len(self.rhythm_sequence))
+        bass = []
 
+        sampled_beats = self.chord_progression_hmm.generate(num_notes)
+        sampled_beats = sampled_beats[::2]
+        sampled_rhythm = generate_rhythm_sequence(num_notes, self.rhythm_model)
+        print(f'rhythm: {sampled_rhythm}')
+        original_sampled_beats = sampled_beats.copy()
 
         i = 0
-        while i < len(self.rhythm_sequence):
+        while i < len(sampled_rhythm):
             #current_time = i * seconds_per_step
             ## Check if on strong beat position
             if i % 8 == 0:
                 ## Need to start playing a fresh note
-                if self.rhythm_sequence[i] == 0:
+                if sampled_rhythm[i] == 0:
                     # Check if ornament note or skeelton note
                     end_index = i + 1
-                    while (end_index < len(self.rhythm_sequence) and self.rhythm_sequence[end_index] == 1):
+                    while (end_index < len(sampled_rhythm) and sampled_rhythm[end_index] == 1):
                         end_index += 1
 
                     # Skeleton note
@@ -58,13 +60,19 @@ class Generator:
                         'chord_function': chord_function
                     }
                     melody.append(note)
-                elif self.rhythm_sequence[i] == 1 or self.rhythm_sequence[i] == 2:
+
+                    # Generate cooresponding bass note
+                    bass_note_chord_tone = self.bass_generator.get_bass_note(skeleton_note.note_chord_tone)
+                    bass_note_midi_pitch = SkeletonEmission(bass_note_chord_tone, 0, skeleton_note.chord_function).calc_midi_pitch(key) - 24
+                    bass.append((bass_note_midi_pitch, i))
+                    print(f'adding a bass note to index {i}. cooresponding treble index {i}, pithc: {midi_pitch}')
+                elif sampled_rhythm[i] == 1 or sampled_rhythm[i] == 2:
                     # Sustaining previous note or rest on this strong beat
                     if sampled_beats:
                         sampled_beats.pop(0)
             else:
                 # need an ornament note first check to see whether we need to generate a new note or note
-                if self.rhythm_sequence[i] == 0:
+                if sampled_rhythm[i] == 0:
                     # check to see if ornament note pitch has already been decided
                     if i in self.fixed_ornament_note_pitches:
                         midi_pitch = self.fixed_ornament_note_pitches[i].calc_midi_pitch(key)
@@ -72,12 +80,15 @@ class Generator:
                     else:
 
                         try:
-                            previous_skeleton_note = self.find_previous_skeleton_note(i, melody)
+                            previous_skeleton_note = self.find_previous_skeleton_note(i, melody, sampled_rhythm)
                             previous_skeleton_note_pitch = previous_skeleton_note['pitch']
                             previous_skeleton_note_chord_function = previous_skeleton_note['chord_function']
-                            next_skeleton_note_pitch, _ = self.find_next_skeleton_note(i, sampled_beats, key)
-                        except Exception:
+                            next_skeleton_note = self.find_next_skeleton_note(i, sampled_beats, sampled_rhythm)
+                            next_skeleton_note_pitch = next_skeleton_note.calc_midi_pitch(key)
+                            print(f'found both')
+                        except ValueError as e:
                             # Default to 0 offset and setting previous chord function to 'I'
+                            print(e)
                             next_skeleton_note_pitch = 60
                             previous_skeleton_note_pitch = 60
                             previous_skeleton_note_chord_function = 'I'
@@ -89,14 +100,15 @@ class Generator:
                         else:
                             offset = previous_skeleton_note_pitch - next_skeleton_note_pitch 
                             chord_function = previous_skeleton_note_chord_function
-                            ornament_note = self.ornament_note_hmm.generate_sequence(offset, chord_function)[0]
+                            ornament_note_offset = self.ornament_note_mcs.generate_sequence(offset)
+                            print(f'ornament note offset: {ornament_note_offset}')
                             if len(melody) > 0:
-                                midi_pitch = melody[-1]['pitch'] + ornament_note.offset
+                                midi_pitch = melody[-1]['pitch'] + ornament_note_offset
                             else:
                                 midi_pitch = previous_skeleton_note_pitch
 
                     end_index = i + 1
-                    while (end_index < len(self.rhythm_sequence) and self.rhythm_sequence[end_index] == 1):
+                    while (end_index < len(sampled_rhythm) and sampled_rhythm[end_index] == 1):
                         end_index += 1
 
                     note = {
@@ -108,16 +120,16 @@ class Generator:
                     melody.append(note)
             i += 1
 
-        return melody, original_sampled_beats
+        return melody, bass, original_sampled_beats
 
     """
         Returns the pitch and chord function of the next skeleton note
     """
-    def find_next_skeleton_note(self, current_index, skeleton_notes, key):
+    def find_next_skeleton_note(self, current_index, skeleton_notes, sampled_rhythm):
         # first find out index of next skeleton note
         next_strong_beat_index = current_index + 1
         found_strong_beat = False
-        while (not found_strong_beat and next_strong_beat_index < len(self.rhythm_sequence)):
+        while (not found_strong_beat and next_strong_beat_index < len(sampled_rhythm)):
             if next_strong_beat_index % 8 == 0:
                 found_strong_beat = True
                 break
@@ -128,13 +140,13 @@ class Generator:
             raise ValueError("no next strong beat found")
 
         # Note being generated at the strong beat
-        if self.rhythm_sequence[next_strong_beat_index] == 1:
+        if sampled_rhythm[next_strong_beat_index] == 0:
             return skeleton_notes[0]
-        elif self.rhythm_sequence[next_strong_beat_index] == 2:
+        elif sampled_rhythm[next_strong_beat_index] == 1:
             # note is being sustained, figure out index of note that will sustain it
             sustained_note_index = next_strong_beat_index-1
             while sustained_note_index >= 0:
-                if self.rhythm_sequence[sustained_note_index] == 1:
+                if sampled_rhythm[sustained_note_index] == 0:
                     break
                 else:
                     sustained_note_index -= 1
@@ -142,10 +154,7 @@ class Generator:
         else:
             raise ValueError("rest being played at skeleton note.")
         
-        pitch = skeleton_notes[0].calc_midi_pitch(key)
-        chord_function = skeleton_notes[0].chord_function
-
-        return pitch, chord_function
+        return skeleton_notes[0]
 
     """ 
         issue right now is that sound playing at previous skeleton note might not be played 
@@ -155,7 +164,7 @@ class Generator:
         that not being played. then we can search for whichever note was generated at that index what the pitch is
         can find index by doing start / seconds_per_step
     """
-    def find_previous_skeleton_note(self, current_index, current_melody):
+    def find_previous_skeleton_note(self, current_index, current_melody, sampled_rhythm):
         # search backwards and find most recent strong beat index
         recent_strong_beat_index = current_index - 1
         found_strong_beat = False
@@ -170,17 +179,17 @@ class Generator:
             raise ValueError("no previous skeleton note found")
 
         # Check if this strong beat was a 1 (new note) or 2 (sustained pitch from previous note)
-        if self.rhythm_sequence[recent_strong_beat_index] == 1:
+        if sampled_rhythm[recent_strong_beat_index] == 0:
             for note in reversed(current_melody):
                 if note['start'] == recent_strong_beat_index:
                     return note
-        elif self.rhythm_sequence[recent_strong_beat_index] == 2:
+        elif sampled_rhythm[recent_strong_beat_index] == 1:
             # note was sustained from somewhere else, need to find note responsible for it 
             # by searching to the left somemore for the most recent 1 note
             recent_new_note_index = recent_strong_beat_index - 1
             found_new_note = False
             while (not found_new_note and recent_new_note_index >= 0):
-                if self.rhythm_sequence[recent_new_note_index] == 1:
+                if sampled_rhythm[recent_new_note_index] == 1:
                     found_new_note = True
                     break
                 else:
@@ -193,70 +202,72 @@ class Generator:
                 if note['start'] == recent_new_note_index:
                     return note
 
+        raise ValueError("no previous skeleton note found")
+
 class OrnamentEmission:
     def __init__(self, offset):
         self.offset = offset
 
-class OrnamentNoteHMMs:
-    def __init__(self, ornament_groupings: list[OrnamentGrouping]):
-        self.offset_function_training_data_mapping = self.split_song_ornaments(ornament_groupings)
-        self.hmms = {}
-        self.num_of_each_role = defaultdict(int)
+class OrnamentNoteMCs:
+    def __init__(self):
+        self.mcs = {}
 
-    def print_stats(self):
-        print(self.num_of_each_role)
+    def save_model(self, filepath='models/ornament_mcs.pkl'):
+        with open(filepath, 'wb') as f:
+            pickle.dump(self, f)
+
+    @classmethod
+    def load(cls, filepath='models/ornament_mcs.pkl'):
+        with open(filepath, 'rb') as f:
+            return pickle.load(f)
 
     def split_song_ornaments(self, ornament_groupings: list[OrnamentGrouping]):
         offset_function_dict = defaultdict(list)
 
         for grouping in ornament_groupings:
             note_offset = grouping.get_group_note_interval()
-            chord_function = grouping.chord_function
-
-            offset_function_dict[(note_offset, chord_function)].append(grouping)
+            offset_function_dict[note_offset].append(grouping)
 
         return offset_function_dict
 
-    def train_hmms(self):
-        for offset_chord_function, training_data in self.offset_function_training_data_mapping.items():
-            hmm = OrnamentHMM()
-            succ_train = hmm.train_model(training_data)
+    def train_mcs(self, training_data: list[OrnamentGrouping]):
+        offset_training_data = self.split_song_ornaments(training_data)
+        for offset, training_data in offset_training_data.items():
+            mc = OrnamentMC()
+            succ_train = mc.train_mc(training_data)
             if succ_train:
-                self.hmms[offset_chord_function] = hmm
-                for role, count in hmm.num_of_each_role.items():
-                    self.num_of_each_role[role] += count
+                self.mcs[offset] = mc
 
-    def generate_sequence(self, offset, chord_function):
-        if (offset, chord_function) not in self.hmms:
-            print(f'{offset, chord_function} not found in self.hmms')
-            # TODO need ot change this back
+    def generate_sequence(self, offset):
+        if offset not in self.mcs:
+            print(f'{offset} not found')
             return [OrnamentEmission(0)]
 
-        hmm = self.hmms[(offset, chord_function)]
-        sampled_sequence = hmm.generate()
-        print(f'for ({offset},{chord_function}): sampled: {sampled_sequence[0].offset} ')
+        mc = self.mcs[offset]
+        sampled_sequence = mc.generate()
         return sampled_sequence
 
-class OrnamentHMM:
+class OrnamentMC:
     def __init__(self):
         self.transition_matrix = {}
-        self.emission_matrix = {}
         self.initial_probabilities = {}
         self.num_of_each_role = defaultdict(int)
 
-    def calc_initial_probabilities(self):
-        initial_probabilities = {}
-        hidden_states = list(self.transition_matrix.keys())
+    def calc_initial_probabilities(self, ornament_groupings: list[OrnamentGrouping]):
+        initial_count = defaultdict(int)
 
-        if len(hidden_states) == 0:
-            raise ValueError("HMM has no hidden states")
+        for grouping in ornament_groupings:
+            if len(grouping.ornament_notes) == 0:
+                continue
+            initial_note_offset = grouping.ornament_notes[0].offset
+            initial_count[initial_note_offset] += 1
 
-        uniform_prob = 1.0 / len(hidden_states)
-        
-        for hidden_state in hidden_states:
-            initial_probabilities[hidden_state] = uniform_prob
+        initial_probs = {}
+        total_count = sum(initial_count.values())
+        for initial_emission, count in initial_count.items():
+            initial_probs[initial_emission] = count / total_count
 
-        return initial_probabilities
+        return initial_probs
 
     def calc_transition_matrix(self, ornament_groupings: list[OrnamentGrouping]):
         transition_count = defaultdict(lambda: defaultdict(int))
@@ -267,79 +278,57 @@ class OrnamentHMM:
                 continue
 
             for i in range(len(grouping.ornament_notes)-1):
-                curr_note_role = grouping.ornament_notes[i].role
-                next_note_role = grouping.ornament_notes[i+1].role
-                transition_count[curr_note_role][next_note_role] += 1
+                curr_note_offset = grouping.ornament_notes[i].offset
+                next_note_offset = grouping.ornament_notes[i+1].offset
+                transition_count[curr_note_offset][next_note_offset] += 1
 
         if len(transition_count) == 0:
             print('no training data')
 
-        transition_probs = defaultdict(lambda: defaultdict(float))
-        for curr_type in transition_count.keys():
-            total_count = sum(transition_count[curr_type].values())
-            self.num_of_each_role[curr_type] += total_count
-            for next_type, count in transition_count[curr_type].items():
-                transition_probs[curr_type][next_type] = count / total_count
+        transition_probs = {}
+        #transition_probs = defaultdict(lambda: defaultdict(float))
+        for current_offset in transition_count.keys():
+            total_count = sum(transition_count[current_offset].values())
+            for next_offset, count in transition_count[current_offset].items():
+                if current_offset not in transition_probs:
+                    transition_probs[current_offset] = {}
+                transition_probs[current_offset][next_offset] = count / total_count
 
         return transition_probs
 
-    def calc_emission_matrix(self, ornament_groupings: list[OrnamentGrouping]):
-        emission_count = defaultdict(lambda: defaultdict(int))
+    def sample_next_offset(self, current_offset):
+        if current_offset not in self.transition_matrix:
+            raise ValueError("Invalid offset.")
 
-        for grouping in ornament_groupings:
-            for note in grouping.ornament_notes:
-                emission_count[note.role][note.offset] += 1
+        next_offsets = list(self.transition_matrix[current_offset].keys())
+        offsets_probs = list(self.transition_matrix[current_offset].values())
 
-        emission_probs = defaultdict(lambda: defaultdict(float))
-        for role in emission_count.keys():
-            total_count = sum(emission_count[role].values())
-            for offset, count in emission_count[role].items():
-                emission_probs[role][offset] = count / total_count
-
-        return emission_probs
-
-    def sample_next_hidden_state(self, current_hidden_state):
-        if current_hidden_state not in self.transition_matrix:
-            raise ValueError("Invalid hidden state")
-
-        next_hidden_states = list(self.transition_matrix[current_hidden_state].keys())
-        next_hidden_probs = list(self.transition_matrix[current_hidden_state].values())
-
-        return next_hidden_states[np.random.choice(len(next_hidden_states), p=next_hidden_probs)]
-
-    def sample_emission(self, hidden_state) -> OrnamentEmission:
-        if hidden_state not in self.emission_matrix:
-            raise ValueError("Invalid hidden state")
-
-        emission_notes = list(self.emission_matrix[hidden_state].keys())
-        emission_probs = list(self.emission_matrix[hidden_state].values())
-
-        offset = emission_notes[np.random.choice(len(emission_notes), p=emission_probs)]
-        return OrnamentEmission(offset)
+        return np.random.choice(next_offsets, p=offsets_probs)
 
     def sample_initial_state(self):
         hidden_states = list(self.initial_probabilities.keys())
         probs = list(self.initial_probabilities.values())
-        return hidden_states[np.random.choice(len(hidden_states), p=probs)]
+        return np.random.choice(hidden_states, p=probs)
 
-    def train_model(self, ornament_groupings: list[OrnamentGrouping]):
+    def train_mc(self, ornament_groupings: list[OrnamentGrouping]):
         try:
             self.transition_matrix = self.calc_transition_matrix(ornament_groupings)
-            self.emission_matrix = self.calc_emission_matrix(ornament_groupings)
-            self.initial_probabilities = self.calc_initial_probabilities()
+            self.initial_probabilities = self.calc_initial_probabilities(ornament_groupings)
             return True
         except ValueError as e:
             print(f'Error training model: {e}')
             return False
 
     def generate(self):
-        hidden_state = self.sample_initial_state()
-        emission = self.sample_emission(hidden_state)
+        emission = self.sample_initial_state()
+        return emission
+        # TODO need to change this
+        #emission = self.sample_emission(hidden_state)
 
-        sampled_hidden_states = [hidden_state]
-        sampled_emissions = [emission]
+        #sampled_hidden_states = [hidden_state]
+        #sampled_emissions = [emission]
         
-        return sampled_emissions
+        #return sampled_emissions
 
         # so basically, this samples some beats, lets say i fix the distance between skeleton notes
         # then i know how many beats i have to sample with
@@ -367,3 +356,14 @@ class OrnamentHMM:
             sampled_emissions.append(emission)
 
         return sampled_hidden_states, sampled_emissions
+
+if __name__ == "__main__":  
+    directory = "/home/sachin/Documents/music_generator/POP909/POP909"
+    data = TrainingDataProcessedInfo()
+    data.load_training_data(directory)
+
+    ornament_note_mcs = OrnamentNoteMCs()
+    ornament_note_mcs.train_mcs(data.ornament_groupings)
+    ornament_note_mcs.save_model()
+    #ornament_note_mcs = OrnamentNoteMCs.load()
+    #print(ornament_note_mcs.mcs[2].transition_matrix)

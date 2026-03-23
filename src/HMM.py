@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from SongInfo import TrainingDataProcessedInfo, OrnamentGrouping, OrnamentNote
+from music21 import corpus, instrument
 
 if TYPE_CHECKING:
     from Note import TrainingNote
@@ -10,6 +12,127 @@ from collections import defaultdict
 import numpy as np
 import pickle
 import os
+
+class BassNoteGenerator:
+    def __init__(self):
+        self.emission_probs = {}
+
+    def get_bass_note(self, soprano_chord_tone):
+        if soprano_chord_tone not in self.emission_probs:
+            return 'root'
+        
+        bass_notes = list(self.emission_probs[soprano_chord_tone].keys())
+        bass_probs = list(self.emission_probs[soprano_chord_tone].values())
+
+        return np.random.choice(bass_notes, p=bass_probs)
+
+    def train_model(self):
+        soprano_bass_pairs = self.create_soprano_bass_pairs()
+
+        emission_count = defaultdict(lambda: defaultdict(int))
+        for soprano_note, bass_note in soprano_bass_pairs:
+            if soprano_note is None or bass_note is None:
+                continue
+            emission_count[soprano_note][bass_note] += 1
+
+        emission_probs = {}
+        for soprano_note in emission_count.keys():
+            if soprano_note not in emission_probs:
+                emission_probs[soprano_note] = {}
+            total_count = sum(emission_count[soprano_note].values())
+            for bass_note, count in emission_count[soprano_note].items():
+                emission_probs[soprano_note][bass_note] = count / total_count
+
+        self.emission_probs = emission_probs
+
+    def save_model(self, filepath='models/bass_model.pkl'):
+        with open(filepath, 'wb') as f:
+            pickle.dump(self, f)
+    
+    @classmethod
+    def load_model(cls, filepath='models/bass_model.pkl'):
+        with open(filepath, 'rb') as f:
+            return pickle.load(f)
+
+    def create_soprano_bass_pairs(self):
+        bach_paths = corpus.getComposer('bach')
+        chorale_paths = [p for p in bach_paths if 'bwv' in str(p).lower()]
+        pairs = []
+
+        for path in chorale_paths:
+            print(f'currently processing {path}...')
+            score = corpus.parse(path)
+
+            soprano = None
+            for p in score.parts:
+                if 'Soprano' in p.id:
+                    soprano = p
+                    break
+            if soprano is None:
+                continue
+
+            bass = None
+            for p in score.parts:
+                if 'Bass' in p.id:
+                    bass = p
+                    break
+            if bass is None:
+                continue
+
+            soprano_notes = soprano.flatten().notes
+            bass_notes = bass.flatten().notes
+            chords = score.chordify()
+            chord_offset_dict = {chord.offset: chord for chord in chords.flatten().getElementsByClass('Chord') }
+
+            for soprano_note in soprano_notes:
+                target_offset = soprano.offset
+                matching_bass_note = None
+
+                # Find matching bass note
+                for bass_note in bass_notes:
+                    if bass_note.offset == target_offset:
+                        matching_bass_note = bass_note
+
+                if matching_bass_note is not None:
+                    chord_offset = max([o for o in chord_offset_dict if o <= soprano_note.offset])
+                    chord = chord_offset_dict.get(chord_offset, None)
+                    if chord is not None:
+                        try:
+                            soprano_chord_tone = self.get_chord_tone(soprano_note, chord)
+                            bass_chord_tone = self.get_chord_tone(matching_bass_note, chord)
+                            pairs.append((soprano_chord_tone, bass_chord_tone))
+                        except Exception:
+                            continue
+                    else:
+                        continue
+            
+        return pairs
+            
+    def get_chord_tone(self, note, chord):
+        if chord is None:
+            return 'root'
+
+        note_pc = note.pitch.pitchClass
+        root_pc = chord.root().pitchClass
+
+        interval = (note_pc - root_pc) % 12
+
+        interval_map = {
+                0: "root", 
+                1: "b2", 
+                2: "2nd", 
+                3: "b3",   # minor 3rd
+                4: "3rd",  # major 3rd
+                5: "4th",
+                6: "b5",   # tritone
+                7: "5th", 
+                8: "b6",   # minor 6th
+                9: "6th",  # major 6th
+                10: "b7",  # minor 7th
+                11: "7th"  # major 7th
+            }
+
+        return interval_map.get(interval, 'root')
 
 class SkeletonEmission:
     def __init__(self, note_chord_tone, octave_offset, chord_function):
@@ -62,14 +185,14 @@ class SkeletonEmission:
 
         return note_midi_pitch
 
-class HMM:
+class ChordHMM:
     def __init__(self):
         self.transition_matrix = {}
         self.duration_matrix = {}
         self.emission_matrix = {}
         self.initial_probabilities = {}
 
-    def save_model(self, filepath="models/hmm.pkl"):
+    def save_model(self, filepath="models/chord_hmm.pkl"):
         transition_probs = {}
         emission_probs = {}
         duration_probs = {}
@@ -97,7 +220,7 @@ class HMM:
         print(f"Model saved to {filepath}.")
 
     @classmethod
-    def load(cls, filepath='models/hmm.pkl'):
+    def load(cls, filepath='models/chord_hmm.pkl'):
         with open(filepath, 'rb') as f:
             model_data = pickle.load(f)
 
@@ -298,31 +421,6 @@ class HMM:
     def get_hidden_states(self):
         return list(self.transition_matrix.keys())
 
-    def viterbi(self, obs):
-        V = [{}]
-        path = {}
-        states = self.get_hidden_states()
-
-        for state in states:
-            V[0][state] = self.initial_probabilities[state] * self.emission_matrix[state][obs[0]]
-            path[state] = [state]
-
-        for i in range(1, len(obs)):
-            V.append({})
-            newpath = {}
-
-            for y in states:
-                (prob, state) = max(
-                    [(V[i-1][y0] * self.transition_matrix[y0][y] * self.emission_matrix[y][obs[i]], y0) for y0 in states]
-                )
-                V[i][y] = prob
-                newpath[y] = path[state] + [y]
-
-            path = newpath
-
-        (prob, state) = max([(V[-1][y], y) for y in states])
-        return (prob, path[state])
-
     def collapse_chord_sequence(self, chord_sequence):
         if len(chord_sequence) <= 1:
             return chord_sequence
@@ -333,3 +431,22 @@ class HMM:
                 collapsed_sequence.append(chord_sequence[i])
 
         return collapsed_sequence
+
+if __name__ == "__main__":
+    #directory = "/home/sachin/Documents/music_generator/POP909/POP909"
+    #data = TrainingDataProcessedInfo()
+    #data.load_training_data(directory)
+
+    #chord_hmm = ChordHMM()
+    #chord_hmm.train_model(data.notes, data.beat_chords)
+
+    #chord_hmm.save_model()
+    #chord_hmm = ChordHMM.load()
+    #print(chord_hmm.transition_matrix)
+    bass = BassNoteGenerator()
+    bass.train_model()
+    print(bass.emission_probs)
+    bass.save_model()
+    bass_loaded = BassNoteGenerator.load_model()
+    print('loaded model:')
+    print(bass_loaded.emission_probs)

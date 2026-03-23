@@ -175,16 +175,14 @@ class GeneratedNote:
         self.chord = chord
 
 class OrnamentNote:
-    def __init__(self, note_role, note_offset):
-        self.role = note_role
+    def __init__(self, note_offset):
         self.offset = note_offset
 
 class OrnamentGrouping:
-    def __init__(self, first_skeleton_note: TrainingNote , second_skeleton_note: TrainingNote, ornament_notes: list[OrnamentNote], chord_function: str):
+    def __init__(self, first_skeleton_note: TrainingNote , second_skeleton_note: TrainingNote, ornament_notes: list[OrnamentNote]):
         self.first_skeleton_note = first_skeleton_note
         self.second_skeleton_note = second_skeleton_note
         self.ornament_notes = ornament_notes
-        self.chord_function = chord_function
 
     def get_group_note_interval(self):
         return self.first_skeleton_note.get_midi_pitch() - self.second_skeleton_note.get_midi_pitch()
