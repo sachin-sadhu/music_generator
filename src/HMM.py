@@ -35,6 +35,7 @@ class BassNoteGenerator:
                 continue
             emission_count[soprano_note][bass_note] += 1
 
+
         emission_probs = {}
         for soprano_note in emission_count.keys():
             if soprano_note not in emission_probs:
@@ -42,6 +43,8 @@ class BassNoteGenerator:
             total_count = sum(emission_count[soprano_note].values())
             for bass_note, count in emission_count[soprano_note].items():
                 emission_probs[soprano_note][bass_note] = count / total_count
+
+        print(emission_probs)
 
         self.emission_probs = emission_probs
 
@@ -445,8 +448,7 @@ if __name__ == "__main__":
     #print(chord_hmm.transition_matrix)
     bass = BassNoteGenerator()
     bass.train_model()
-    print(bass.emission_probs)
-    bass.save_model()
-    bass_loaded = BassNoteGenerator.load_model()
-    print('loaded model:')
-    print(bass_loaded.emission_probs)
+    #print(bass.emission_probs)
+    #bass.save_model()
+    #print('loaded model:')
+    #print(bass_loaded.emission_probs)

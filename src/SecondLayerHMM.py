@@ -105,7 +105,6 @@ class Generator:
                             offset = previous_skeleton_note_pitch - next_skeleton_note_pitch 
                             chord_function = previous_skeleton_note_chord_function
                             ornament_note_offset = self.ornament_note_mcs.generate_sequence(offset)
-                            print(f'ornament note offset: {ornament_note_offset}')
                             if len(melody) > 0:
                                 midi_pitch = melody[-1]['pitch'] + ornament_note_offset
                             else:
@@ -243,12 +242,14 @@ class OrnamentNoteMCs:
                 self.mcs[offset] = mc
 
     def generate_sequence(self, offset):
-        if offset not in self.mcs:
+        if abs(offset) not in self.mcs:
             print(f'{offset} not found')
-            return [OrnamentEmission(0)]
+            return 0
 
-        mc = self.mcs[offset]
-        sampled_sequence = mc.generate()
+        # Get correct markov chain object
+        mc = self.mcs[abs(offset)]
+        direction = 'ascending' if offset >= 0 else 'descending'
+        sampled_sequence = mc.generate(direction)
         return sampled_sequence
 
 class OrnamentMC:
@@ -290,7 +291,6 @@ class OrnamentMC:
             print('no training data')
 
         transition_probs = {}
-        #transition_probs = defaultdict(lambda: defaultdict(float))
         for current_offset in transition_count.keys():
             total_count = sum(transition_count[current_offset].values())
             for next_offset, count in transition_count[current_offset].items():
@@ -310,9 +310,9 @@ class OrnamentMC:
         return np.random.choice(next_offsets, p=offsets_probs)
 
     def sample_initial_state(self):
-        hidden_states = list(self.initial_probabilities.keys())
+        offsets = list(self.initial_probabilities.keys())
         probs = list(self.initial_probabilities.values())
-        return np.random.choice(hidden_states, p=probs)
+        return np.random.choice(offsets, p=probs)
 
     def train_mc(self, ornament_groupings: list[OrnamentGrouping]):
         try:
@@ -323,9 +323,13 @@ class OrnamentMC:
             print(f'Error training model: {e}')
             return False
 
-    def generate(self):
+    # direction can either be positive or negative
+    def generate(self, direction):
         emission = self.sample_initial_state()
-        return emission
+        if direction == 'ascending':
+            return emission
+        else:
+            return emission * -1
         # TODO need to change this
         #emission = self.sample_emission(hidden_state)
 
@@ -362,12 +366,12 @@ class OrnamentMC:
         return sampled_hidden_states, sampled_emissions
 
 if __name__ == "__main__":  
-    directory = "/home/sachin/Documents/music_generator/POP909/POP909"
-    data = TrainingDataProcessedInfo()
-    data.load_training_data(directory)
+    #directory = "/cs/home/slzys1/Documents/music_generator/POP909"
+    #data = TrainingDataProcessedInfo()
+    #data.load_training_data(directory)
 
-    ornament_note_mcs = OrnamentNoteMCs()
-    ornament_note_mcs.train_mcs(data.ornament_groupings)
-    ornament_note_mcs.save_model()
-    #ornament_note_mcs = OrnamentNoteMCs.load()
-    #print(ornament_note_mcs.mcs[2].transition_matrix)
+    #ornament_note_mcs = OrnamentNoteMCs()
+    #ornament_note_mcs.train_mcs(data.ornament_groupings)
+    #ornament_note_mcs.save_model()
+    ornament_note_mcs = OrnamentNoteMCs.load()
+    print(ornament_note_mcs.mcs[2].transition_matrix)

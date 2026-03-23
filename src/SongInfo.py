@@ -208,7 +208,6 @@ class TrainingDataProcessedInfo:
                 continue
 
             chord_function = chord.get_function(song_key)
-            chord_tone_notes = get_chord_tones(chord)
 
             if chord_function == 'N':
                 continue
@@ -220,39 +219,16 @@ class TrainingDataProcessedInfo:
             for i in range(1, len(ornament_notes)-1):
                 prev_note_midi_pitch = ornament_notes[i-1].get_midi_pitch()
                 curr_note_midi_pitch = ornament_notes[i].get_midi_pitch()
-                next_note_midi_pitch = ornament_notes[i+1].get_midi_pitch()
 
-                note_role = self.determine_ornament_note_role(prev_note_midi_pitch, curr_note_midi_pitch, next_note_midi_pitch, chord_tone_notes)
-                note_offset = curr_note_midi_pitch - prev_note_midi_pitch
-                note_duration = ornament_notes[i].get_duration()
+                note_offset = abs(curr_note_midi_pitch - prev_note_midi_pitch)
 
-                ornament_note = OrnamentNote(note_role, note_offset)
+                ornament_note = OrnamentNote(note_offset)
                 processed_ornament_notes.append(ornament_note)
 
-            ornament_grouping = OrnamentGrouping(skeleton_one, skeleton_two, processed_ornament_notes, chord_function)
+            ornament_grouping = OrnamentGrouping(skeleton_one, skeleton_two, processed_ornament_notes)
             groupings.append(ornament_grouping)
 
         return groupings
-
-    def determine_ornament_note_role(self, prev_note_pitch, target_note_pitch, next_note_pitch, chord_tones):
-        step_from_prev = abs(target_note_pitch - prev_note_pitch)
-        step_to_next = abs(target_note_pitch - next_note_pitch)
-        same_direction = (prev_note_pitch < target_note_pitch < next_note_pitch) or (prev_note_pitch > target_note_pitch > next_note_pitch)
-
-        #prev_note_pitch_class = prev_note_pitch % 12
-        target_note_pitch_class = target_note_pitch % 12
-        next_note_pitch_class = next_note_pitch % 12
-
-        if step_to_next == 1 and next_note_pitch_class in chord_tones and target_note_pitch_class not in chord_tones:
-            return "chromatic_approach"
-        elif same_direction and step_from_prev <= 2:
-            return "passing_tone"
-        elif step_from_prev <= 2 and step_to_next <= 2 and not same_direction:
-            return "neighbour_tone"
-        elif target_note_pitch_class in chord_tones:
-            return "chord_tone"
-        else:
-            return "other"
 
     def find_ornament_notes(self, note1: TrainingNote, note2: TrainingNote, notes: list[TrainingNote]) -> list[TrainingNote]:
         """

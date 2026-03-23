@@ -353,7 +353,7 @@ if __name__ == "__main__":
 
     score.append(treble)
     score.append(bass)
-    score.write('midi', fp='bloop500.mid')
+    score.write('midi', fp='helloworld.mid')
     #score.write('lilypond.pdf', fp='asdflj')
 
     ##cleaned_melody = postprocess_melody(melody_sequence, key)
