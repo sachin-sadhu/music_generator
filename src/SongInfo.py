@@ -219,9 +219,7 @@ class TrainingDataProcessedInfo:
             for i in range(1, len(ornament_notes)-1):
                 prev_note_midi_pitch = ornament_notes[i-1].get_midi_pitch()
                 curr_note_midi_pitch = ornament_notes[i].get_midi_pitch()
-
-                note_offset = abs(curr_note_midi_pitch - prev_note_midi_pitch)
-
+                note_offset = curr_note_midi_pitch - prev_note_midi_pitch
                 ornament_note = OrnamentNote(note_offset)
                 processed_ornament_notes.append(ornament_note)
 

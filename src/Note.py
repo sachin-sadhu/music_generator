@@ -185,4 +185,4 @@ class OrnamentGrouping:
         self.ornament_notes = ornament_notes
 
     def get_group_note_interval(self):
-        return abs(self.first_skeleton_note.get_midi_pitch() - self.second_skeleton_note.get_midi_pitch())
+        return self.first_skeleton_note.get_midi_pitch() - self.second_skeleton_note.get_midi_pitch()

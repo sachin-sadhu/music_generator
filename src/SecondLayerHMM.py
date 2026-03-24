@@ -82,9 +82,8 @@ class Generator:
                         midi_pitch = self.fixed_ornament_note_pitches[i].calc_midi_pitch(key)
                         chord_function = self.fixed_ornament_note_pitches[i].chord_function
                     else:
-
                         try:
-                            previous_skeleton_note = self.find_previous_skeleton_note(i, melody, sampled_rhythm)
+                            previous_skeleton_note, previous_skeleton_note_index = self.find_previous_skeleton_note(i, melody, sampled_rhythm)
                             previous_skeleton_note_pitch = previous_skeleton_note['pitch']
                             previous_skeleton_note_chord_function = previous_skeleton_note['chord_function']
                             next_skeleton_note = self.find_next_skeleton_note(i, sampled_beats, sampled_rhythm)
@@ -95,18 +94,24 @@ class Generator:
                             print(e)
                             next_skeleton_note_pitch = 60
                             previous_skeleton_note_pitch = 60
-                            previous_skeleton_note_chord_function = 'I'
+                            previous_skeleton_note_index = 0
 
                         # Check if this note is the note that sutains onto the next strong beat note
                         if i in self.fixed_ornament_note_pitches:
                             midi_pitch = self.fixed_ornament_note_pitches[i].calc_midi_pitch(key)
-                            chord_function = self.fixed_ornament_note_pitches[i].chord_function
                         else:
-                            offset = previous_skeleton_note_pitch - next_skeleton_note_pitch 
-                            chord_function = previous_skeleton_note_chord_function
-                            ornament_note_offset = self.ornament_note_mcs.generate_sequence(offset)
+                            try:
+                                skeleton_offset = previous_skeleton_note_pitch - next_skeleton_note_pitch 
+                                ornament_mc = self.ornament_note_mcs.mcs[skeleton_offset]
+                                ornament_note_offset = ornament_mc.generate(previous_skeleton_note_index, i)
+                            except ValueError as e:
+                                print(e)
+                                ornament_note_offset = 0
+
                             if len(melody) > 0:
                                 midi_pitch = melody[-1]['pitch'] + ornament_note_offset
+                                print(f'current midi_pitch: {midi_pitch}')
+                                #midi_pitch = max(40, min(midi_pitch, 80))
                             else:
                                 midi_pitch = previous_skeleton_note_pitch
 
@@ -185,7 +190,7 @@ class Generator:
         if sampled_rhythm[recent_strong_beat_index] == 0:
             for note in reversed(current_melody):
                 if note['start'] == recent_strong_beat_index:
-                    return note
+                    return note, recent_strong_beat_index
         elif sampled_rhythm[recent_strong_beat_index] == 1:
             # note was sustained from somewhere else, need to find note responsible for it 
             # by searching to the left somemore for the most recent 1 note
@@ -203,7 +208,7 @@ class Generator:
             
             for note in reversed(current_melody):
                 if note['start'] == recent_new_note_index:
-                    return note
+                    return note, recent_strong_beat_index
 
         raise ValueError("no previous skeleton note found")
 
@@ -241,22 +246,12 @@ class OrnamentNoteMCs:
             if succ_train:
                 self.mcs[offset] = mc
 
-    def generate_sequence(self, offset):
-        if abs(offset) not in self.mcs:
-            print(f'{offset} not found')
-            return 0
-
-        # Get correct markov chain object
-        mc = self.mcs[abs(offset)]
-        direction = 'ascending' if offset >= 0 else 'descending'
-        sampled_sequence = mc.generate(direction)
-        return sampled_sequence
-
 class OrnamentMC:
     def __init__(self):
         self.transition_matrix = {}
         self.initial_probabilities = {}
-        self.num_of_each_role = defaultdict(int)
+        self.recent_index_used = -1
+        self.recent_offset = None
 
     def calc_initial_probabilities(self, ornament_groupings: list[OrnamentGrouping]):
         initial_count = defaultdict(int)
@@ -324,54 +319,27 @@ class OrnamentMC:
             return False
 
     # direction can either be positive or negative
-    def generate(self, direction):
-        emission = self.sample_initial_state()
-        if direction == 'ascending':
-            return emission
+    def generate(self, skeleton_note_index, current_note_index):
+        # Last time this MC was used was before current skeleotn note index. therefore need to sample new note
+        print(f'last time mc was used was {self.recent_index_used}. current skeelton note index: {skeleton_note_index}. current note index: {current_note_index}')
+        if self.recent_index_used < skeleton_note_index:
+            emission = self.sample_initial_state()
+            print(f'sampling from initila')
         else:
-            return emission * -1
-        # TODO need to change this
-        #emission = self.sample_emission(hidden_state)
+            emission = self.sample_next_offset(self.recent_offset)
+            print(f'sampling from old one')
 
-        #sampled_hidden_states = [hidden_state]
-        #sampled_emissions = [emission]
-        
-        #return sampled_emissions
+        print(f'note emission: {emission}')
+        self.recent_index_used = current_note_index
+        self.recent_offset = emission
 
-        # so basically, this samples some beats, lets say i fix the distance between skeleton notes
-        # then i know how many beats i have to sample with
-        # so then, i only want to sample beats that have a duration <= the beats i have left 
-        # could just repeatedly sample, lets say 10 times until i get a valid note, if after 10 samples
-        # i dont get any valid notes, just take the next sampled pitch, fix it to a duration equal to remaining duration
-
-        while remaining_beats > 0:
-            hidden_state = self.sample_next_hidden_state(hidden_state)
-            found_valid_emission = False
-            for i in range(10):
-                emission = self.sample_emission(hidden_state)
-                next_duration = rhytm_mc.sample_next_duration(sampled_emissions[-1].duration)
-                print(f'remaining beat duration: {remaining_beats}. found an emission with a duration {emission.duration}')
-                if next_duration <= remaining_beats:
-                    found_valid_emission = True
-                    emission.duration = next_duration
-                    break
-            if not found_valid_emission:
-                emission = self.sample_emission(hidden_state)
-                emission.duration = remaining_beats
-            remaining_beats -= emission.duration
-
-            sampled_hidden_states.append(hidden_state)
-            sampled_emissions.append(emission)
-
-        return sampled_hidden_states, sampled_emissions
+        return emission
 
 if __name__ == "__main__":  
-    #directory = "/cs/home/slzys1/Documents/music_generator/POP909"
-    #data = TrainingDataProcessedInfo()
-    #data.load_training_data(directory)
+    directory = "/home/sachin/Documents/music_generator/POP909/POP909"
+    data = TrainingDataProcessedInfo()
+    data.load_training_data(directory)
 
-    #ornament_note_mcs = OrnamentNoteMCs()
-    #ornament_note_mcs.train_mcs(data.ornament_groupings)
-    #ornament_note_mcs.save_model()
-    ornament_note_mcs = OrnamentNoteMCs.load()
-    print(ornament_note_mcs.mcs[2].transition_matrix)
+    ornament_note_mcs = OrnamentNoteMCs()
+    ornament_note_mcs.train_mcs(data.ornament_groupings)
+    ornament_note_mcs.save_model()
