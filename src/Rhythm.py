@@ -347,17 +347,17 @@ def markov_log_likelihood(test_sequences, transition_probs, smoothing=1e-10):
     return np.mean(log_probs)
 
 if __name__ == "__main__":
-    unprocessed_song_sequences = extract_sequences_from_dataset('./test_data')
+    unprocessed_song_sequences = extract_sequences_from_dataset('./POP909')
     filtered_sequence = [filter_out_beginning_end_rests(sequence) for sequence in unprocessed_song_sequences]
     filtered_sequence = [seq for seq in filtered_sequence if len(seq) > 0]
-    ##print(filtered_sequence)
+    ###print(filtered_sequence)
     processed_song_sequences = [convert_to_num_beats(sequence) for sequence in filtered_sequence]
-    ##print(filtered_sequence)
+    ###print(filtered_sequence)
 
     training_set, validation_set, testing_set = split_training_set_validation_set(processed_song_sequences)
-    #print(f'lenght of training set: {len(training_set)}')
-    #print(f'lenght of validation set: {len(validation_set)}')
-    #print(f'lenght of testing set: {len(testing_set)}')
+    print(f'lenght of training set: {len(training_set)}')
+    print(f'lenght of validation set: {len(validation_set)}')
+    print(f'lenght of testing set: {len(testing_set)}')
 
     ###optimal_num_hidden_states, _ = find_best_num_hidden_states(training_set)
     ###print(f'optimal number of hidden states: {optimal_num_hidden_states}')
@@ -369,14 +369,14 @@ if __name__ == "__main__":
     #occurence_probs = count_num_occurences(processed_song_sequences)
     #print(calculate_unigram_baseline(test_data_collapsed, occurence_probs))
 
-    transition_probs = train_markov_chain(processed_song_sequences)
-    markov_ll = markov_log_likelihood(testing_set, transition_probs)
-    print(markov_ll)
-    #model, _ = train_model(training_set, validation_set, 20, n_iter=1000)
+    #transition_probs = train_markov_chain(processed_song_sequences)
+    #markov_ll = markov_log_likelihood(testing_set, transition_probs)
+    #print(markov_ll)
+    model, _ = train_model(training_set, validation_set, 20, n_iter=1000)
+    save_model("models/rhythm_model.pkl", model)
 
     #print(f'test log-likelihood: {test_score / sum(test_data_lengths)}')
-    #print(model.monitor_)
-    #save_model('rhythm_model.pkl', model)
+    print(model.monitor_)
     #print(f'original model: {model}')
     #print(loglikelihood / (len(validation_data) * len(rhythm_16)))
 

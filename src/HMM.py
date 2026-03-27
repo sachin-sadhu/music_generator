@@ -692,13 +692,71 @@ def get_segments(test_data):
     segments.append((curr_chord, len(curr_emissions), curr_emissions))
     return segments
 
+def hsmm_chord_ll_first_order(chord_data, model):
+    epsilon = 1e-9
+    segments = []
+    for song in chord_data:
+        curr_chord = song[0]
+        duration_counter = 1
+        for chord in song[1:]:
+            if chord == curr_chord:
+                duration_counter += 1
+            else:
+                segments.append((curr_chord, duration_counter))
+                curr_chord = chord
+                duration_counter = 1
+    
+    log_probs = []
+    for i, (curr_chord, duration_counter) in enumerate(segments):   
+        try:
+            if i >= 1:
+                prev_chord = segments[i - 1][0]
+                trans_probs = model.transition_matrix(prev_chord)[curr_chord]
+                log_probs.append(np.log(np.maximum(trans_probs, epsilon)))
+
+            dur_probs = model.duration_matrix[curr_chord][duration_counter]
+            log_probs.append(np.log(np.maximum(dur_probs, epsilon)))
+        except Exception:
+            continue
+
+    return np.mean(log_probs)
+
+def hsmm_chord_ll(chord_data, model):
+    epsilon = 1e-9
+    segments = []
+    for song in chord_data:
+        curr_chord = song[0]
+        duration_counter = 1
+        for chord in song[1:]:
+            if chord == curr_chord:
+                duration_counter += 1
+            else:
+                segments.append((curr_chord, duration_counter))
+                curr_chord = chord
+                duration_counter = 1
+    
+    log_probs = []
+    for i, (curr_chord, duration_counter) in enumerate(segments):   
+        try:
+            if i >= 2:
+                prev_chord = segments[i - 1][0]
+                prev_prev_chord = segments[i - 2][0]
+                trans_probs = model.transition_matrix([prev_prev_chord, prev_chord])[curr_chord]
+                log_probs.append(np.log(np.maximum(trans_probs, epsilon)))
+
+            dur_probs = model.duration_matrix[curr_chord][duration_counter]
+            log_probs.append(np.log(np.maximum(dur_probs, epsilon)))
+        except Exception:
+            continue
+
+    return np.mean(log_probs)
+
 def hsmm_log_likelihood(test_data, model):
     epsilon = 1e-10
     segments = get_segments(test_data)
     log_probs = []
 
     for i, (chord, duration, emissions) in enumerate(segments):
-
         try:
             if i >= 2:
                 prev_chord = segments[i - 1][0]
@@ -741,23 +799,66 @@ def hsmm_log_likelihood_first_order(test_data, model):
 
     return np.mean(log_probs)
 
+def count_num_occurences(sequences):
+    occurences = defaultdict(int)
+    for sequence in sequences:
+        for event in sequence:
+            occurences[event] += 1
+
+    occurences_probs = defaultdict(float)
+    total_events = sum(occurences.values())
+    for event, count in occurences.items():
+        occurences_probs[event] = count / total_events
+
+    return occurences_probs
+
+def calculate_unigram_baseline(test_sequence, events_probs_dict):
+    probs = []
+    for sequence in test_sequence:
+        for event in sequence:
+            probs.append(events_probs_dict[event])
+    return np.mean(np.log(probs))
 
 if __name__ == "__main__":
-    training_directory = "/home/sachin/Documents/music_generator/POP909_training"
+    training_directory = "./POP909_training"
     training_data = TrainingDataProcessedInfo()
     training_data.load_training_data(training_directory)
 
-    testing_directory = "/home/sachin/Documents/music_generator/POP909_testing"
+    testing_directory = "./POP909_testing"
     testing_data = TrainingDataProcessedInfo()
     testing_data.load_training_data(testing_directory)
 
-    chord_hmm = ChordHMM()
-    chord_hmm.train_model(training_data.notes, training_data.beat_chords)
-    print(hsmm_log_likelihood(testing_data.notes, chord_hmm))
+    chord_hmm_second_order = ChordHMM()
+    chord_hmm_second_order.train_model(training_data.notes, training_data.beat_chords)
+    chord_hmm_second_order.save_model('models/second_order_hmm.pkl')
 
     chord_hmm_first_order = ChordHMMFirstOrder()
     chord_hmm_first_order.train_model(training_data.notes, training_data.beat_chords)
-    print(hsmm_log_likelihood_first_order(testing_data.notes, chord_hmm_first_order))
+    chord_hmm_first_order.save_model('models/first_order_hmm.pkl')
+    
+
+    #chord_probs_occurence = count_num_occurences(training_data.beat_chords)
+    #print(f'baseline{calculate_unigram_baseline(testing_data.beat_chords, chord_probs_occurence)}')
+
+    #model = ChordHMM.load()
+    #print(f'chord hmm log likelihod for 2nd order hmm {hsmm_chord_ll(testing_data.beat_chords, model)}')
+
+    #first_order_model = ChordHMMFirstOrder()
+    #first_order_model.train_model(training_data.notes, training_data.beat_chords)
+    #print(f'chord hmm log likelihod for first order hmm {hsmm_chord_ll_first_order(testing_data.beat_chords, first_order_model)}')
+
+    #testing_directory = "./POP909_testing"
+    #testing_data = TrainingDataProcessedInfo()
+    #testing_data.load_training_data(testing_directory)
+
+    #chord_hmm = ChordHMM()
+    #chord_hmm.train_model(training_data.notes, training_data.beat_chords)
+    #chord_hmm.save_model()
+    #print(hsmm_log_likelihood(testing_data.notes, chord_hmm))
+
+    #chord_hmm_first_order = ChordHMMFirstOrder()
+    #chord_hmm_first_order.train_model(training_data.notes, training_data.beat_chords)
+    #print(hsmm_log_likelihood_first_order(testing_data.notes, chord_hmm_first_order))
     #chord_hmm = ChordHMM.load()
     #print(f'first oder: {hsmm_log_likelihood_first_order(data.notes, chord_hmm_first_order)}')
     #print(f'second oder: {hsmm_log_likelihood(data.notes, chord_hmm)}')

@@ -2,7 +2,7 @@ from music21 import stream, note, tempo, instrument, chord
 import numpy as np
 from Preprocessing import *
 from ChordFunctions import *
-from HMM import ChordHMM
+from HMM import ChordHMM, ChordHMMFirstOrder
 from SecondLayerHMM import Generator
 from Timings import KeyTiming
 from Rhythm import *
@@ -149,7 +149,68 @@ def fill_chord_triad(notes, key):
                 chord_tones.append((midi_pitch, 1.0, beat_onset))
                 print(f'beat onset: {beat_onset}')
 
-    print(chord_tones)
+def postprocess_bass(notes, key):
+    """
+    Clean up generated melody by avoiding really bad notes.
+    """
+
+    cleaned_up_notes = []
+    key_name = key.name
+    # Define key scales (notes to keep)
+    KEY_SCALES = {
+        'A:maj': [9, 11, 1, 2, 4, 6, 8],      # A, B, C#, D, E, F#, G#
+        'C:maj': [0, 2, 4, 5, 7, 9, 11],      # C, D, E, F, G, A, B
+        'D:maj': [2, 4, 6, 7, 9, 11, 1],      # D, E, F#, G, A, B, C#
+        'G:maj': [7, 9, 11, 0, 2, 4, 6],      # G, A, B, C, D, E, F#
+        # Add more keys as needed
+    }
+    
+    # Define tritones from tonic (notes to absolutely avoid)
+    TRITONES = {
+        'A:maj': 3,   # D#/Eb
+        'C:maj': 6,   # F#/Gb  
+        'D:maj': 8,   # G#/Ab
+        'G:maj': 1,   # C#/Db
+    }
+    
+    if key_name not in KEY_SCALES:
+        return notes  # Skip processing if key not defined
+    
+    allowed_notes = set(KEY_SCALES[key_name])
+    tritone = TRITONES.get(key_name)
+    
+    for note in notes:
+        pitch_class = note[0] % 12  # Get note within one octave
+        
+        # Check if its tritone
+        if pitch_class == tritone:
+            # Move tritone to nearest safe note
+            if tritone + 1 in allowed_notes:
+                corrected_pitch = note[0] + 1
+            elif tritone - 1 in allowed_notes:
+                corrected_pitch = note[0] - 1
+            else:
+                corrected_pitch = note[0] + 2  # Fallback
+            
+            cleaned_up_notes.append((corrected_pitch, note[1]))
+            
+        # Check if it's outside the key scale
+        elif pitch_class not in allowed_notes:
+            # Find nearest note in scale
+            distances = [(abs(pitch_class - allowed), allowed) for allowed in allowed_notes]
+            distances.sort(key=lambda x: x[0])
+            
+            nearest_note = distances[0][1]
+            pitch_adjustment = nearest_note - pitch_class
+            
+            # Handle octave wrapping
+            if abs(pitch_adjustment) > 6:
+                pitch_adjustment = 12 - abs(pitch_adjustment)
+                if pitch_adjustment < 0:
+                    pitch_adjustment = -pitch_adjustment
+                    
+            corrected_pitch = note[0] + pitch_adjustment
+            cleaned_up_notes.append((corrected_pitch, note[1]))
 
 def postprocess_melody(notes, key):
     """
@@ -261,7 +322,7 @@ def generate_score(key: KeyTiming, rhythm_sequence: list[int], soprano_notes: li
             treble.append(rest)
 
     score.append(treble)
-    score.write('midi', fp='yesssfinal.mid')
+    score.write('midi', fp='c_major.mid')
     #score.write('lilypond.pdf', fp='mmb')
 
 if __name__ == "__main__":
@@ -271,18 +332,21 @@ if __name__ == "__main__":
 
     #chord_beat_hmm = HMM()
     #chord_beat_hmm.train_model(data.notes, data.beat_chords)
-    chord_hmm = ChordHMM.load()
+    second_order_chord_hmm = ChordHMM.load('models/second_order_hmm.pkl')
+    #first_order_chord_hmm = ChordHMMFirstOrder.load('models/first_order_hmm.pkl')
     ornament_hmms = OrnamentNoteMCs.load()
     bass_model = BassNoteGenerator.load_model()
     rhythm_model = load_model('models/rhythm_model.pkl')
 
     num_notes = 256
-    song = Generator(chord_hmm, ornament_hmms, rhythm_model, bass_model)
+    song = Generator(second_order_chord_hmm, ornament_hmms, rhythm_model, bass_model)
     key = KeyTiming('C:maj')
     melody, bass_notes, sampled_beats = song.generate(key, num_notes)
     print(f'melody: {melody}')
+    print(f'bass notes: {bass_notes}')
 
     postprocess_melody(melody, key)
+    fixed_bass_notes = postprocess_bass(bass_notes, key)
 
     score = stream.Score()
 
@@ -353,7 +417,8 @@ if __name__ == "__main__":
 
     score.append(treble)
     score.append(bass)
-    score.write('midi', fp='yayy_fixed.mid')
+    score.writedirectory = "/home/sachin/Documents/music_generator/POP909/POP909"
+    #('midi', fp='final_eval_c_major_second_order.mid')
     #score.write('lilypond.pdf', fp='asdflj')
 
     ##cleaned_melody = postprocess_melody(melody_sequence, key)
