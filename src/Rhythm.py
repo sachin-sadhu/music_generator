@@ -2,8 +2,10 @@ import pretty_midi
 import numpy as np
 from hmmlearn import hmm
 from sklearn.model_selection import KFold
+from collections import defaultdict
 import pickle
 import os
+import matplotlib.pyplot as plt
 
 def save_model(filename, model):
     with open(filename, 'wb') as file:
@@ -299,27 +301,78 @@ def generate_rhythm_sequence(num_notes, model):
 
     return sampled_sequence[:index]
 
-if __name__ == "__main__":
-    #unprocessed_song_sequences = extract_sequences_from_dataset('./test_data')
-    #filtered_sequence = [filter_out_beginning_end_rests(sequence) for sequence in unprocessed_song_sequences]
-    #filtered_sequence = [seq for seq in filtered_sequence if len(seq) > 0]
-    #print(filtered_sequence)
-    #processed_song_sequences = [convert_to_num_beats(sequence) for sequence in filtered_sequence]
-    #print(filtered_sequence)
+def count_num_occurences(sequences):
+    occurences = defaultdict(int)
+    for sequence in processed_song_sequences:
+        for event in sequence:
+            occurences[event] += 1
 
-    #training_set, validation_set, testing_set = split_training_set_validation_set(processed_song_sequences)
+    occurences_probs = defaultdict(float)
+    total_events = sum(occurences.values())
+    for event, count in occurences.items():
+        occurences_probs[event] = count / total_events
+
+    return occurences_probs
+
+def calculate_unigram_baseline(test_sequence, event_probs_dict):
+    probs = [event_probs_dict[event[0]] for event in test_sequence]
+    normalised_ll = np.mean(np.log(probs))
+    return normalised_ll
+
+def train_markov_chain(train_sequences):
+    counts = defaultdict(lambda: defaultdict(int))
+    
+    for sequence in train_sequences:
+        for i in range(len(sequence) - 1):
+            counts[sequence[i]][sequence[i+1]] += 1
+    
+    # Convert to probabilities
+    transition_probs = {}
+    for state, next_states in counts.items():
+        total = sum(next_states.values())
+        transition_probs[state] = {k: v/total for k, v in next_states.items()}
+    
+    return transition_probs
+
+def markov_log_likelihood(test_sequences, transition_probs, smoothing=1e-10):
+    log_probs = []
+    
+    for sequence in test_sequences:
+        sequence = np.array(sequence).flatten()
+        for i in range(len(sequence) - 1):
+            curr, next_chord = int(sequence[i]), int(sequence[i+1])
+            prob = transition_probs.get(curr, {}).get(next_chord, smoothing)
+            log_probs.append(np.log(prob))
+    
+    return np.mean(log_probs)
+
+if __name__ == "__main__":
+    unprocessed_song_sequences = extract_sequences_from_dataset('./test_data')
+    filtered_sequence = [filter_out_beginning_end_rests(sequence) for sequence in unprocessed_song_sequences]
+    filtered_sequence = [seq for seq in filtered_sequence if len(seq) > 0]
+    ##print(filtered_sequence)
+    processed_song_sequences = [convert_to_num_beats(sequence) for sequence in filtered_sequence]
+    ##print(filtered_sequence)
+
+    training_set, validation_set, testing_set = split_training_set_validation_set(processed_song_sequences)
     #print(f'lenght of training set: {len(training_set)}')
     #print(f'lenght of validation set: {len(validation_set)}')
     #print(f'lenght of testing set: {len(testing_set)}')
 
-    ##optimal_num_hidden_states, _ = find_best_num_hidden_states(training_set)
-    ##print(f'optimal number of hidden states: {optimal_num_hidden_states}')
+    ###optimal_num_hidden_states, _ = find_best_num_hidden_states(training_set)
+    ###print(f'optimal number of hidden states: {optimal_num_hidden_states}')
 
-    #test_data_collapsed = np.concatenate(testing_set)
-    #test_data_collapsed = test_data_collapsed.reshape(-1 ,1)
-    #test_data_lengths = [len(sequence) for sequence in testing_set]   
+    test_data_collapsed = np.concatenate(testing_set)
+    test_data_collapsed = test_data_collapsed.reshape(-1 ,1)
+    test_data_lengths = [len(sequence) for sequence in testing_set]   
+
+    #occurence_probs = count_num_occurences(processed_song_sequences)
+    #print(calculate_unigram_baseline(test_data_collapsed, occurence_probs))
+
+    transition_probs = train_markov_chain(processed_song_sequences)
+    markov_ll = markov_log_likelihood(testing_set, transition_probs)
+    print(markov_ll)
     #model, _ = train_model(training_set, validation_set, 20, n_iter=1000)
-    #test_score = model.score(test_data_collapsed, test_data_lengths)
 
     #print(f'test log-likelihood: {test_score / sum(test_data_lengths)}')
     #print(model.monitor_)
@@ -327,10 +380,19 @@ if __name__ == "__main__":
     #print(f'original model: {model}')
     #print(loglikelihood / (len(validation_data) * len(rhythm_16)))
 
-    model = load_model('rhythm_model.pkl')
+    #model = load_model('rhythm_model.pkl')
+    #test_score = model.score(test_data_collapsed, test_data_lengths)
+    #print(f'test log-likelihood: {test_score / sum(test_data_lengths)}')
+    #log_likelihoods = model.monitor_.history
+    #plt.plot(log_likelihoods)
+    #plt.xlabel('Iteration')
+    #plt.ylabel('Log likelihood')
+    #plt.title("HMM Training Log Likelihood")
+    #plt.savefig("log_likelihood_plt.png")
+    #test_score = model.score(test_data_collapsed, test_data_lengths)
 
-    X = generate_rhythm_sequence(256, model)
-    print(X)
+    #X = generate_rhythm_sequence(256, model)
+    #print(X)
 
     
 

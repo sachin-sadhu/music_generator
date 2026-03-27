@@ -435,19 +435,345 @@ class ChordHMM:
 
         return collapsed_sequence
 
-if __name__ == "__main__":
-    #directory = "/home/sachin/Documents/music_generator/POP909/POP909"
-    #data = TrainingDataProcessedInfo()
-    #data.load_training_data(directory)
+class ChordHMMFirstOrder:
+    def __init__(self):
+        self.transition_matrix = {}
+        self.duration_matrix = {}
+        self.emission_matrix = {}
+        self.initial_probabilities = {}
 
+    def save_model(self, filepath="models/chord_hmm.pkl"):
+        transition_probs = {}
+        emission_probs = {}
+        duration_probs = {}
+
+        if self.duration_matrix:
+            duration_probs = {k: dict(v) for k, v in self.duration_matrix.items()}
+
+        if self.transition_matrix:
+            transition_probs = {k: dict(v) for k, v in self.transition_matrix.items()}
+
+        if self.emission_matrix:
+            emission_probs = {k: dict(v) for k, v in self.emission_matrix.items()}
+
+        model_data = {
+            'transition_probs': transition_probs,
+            'duration_probs': duration_probs,
+            'emission_probs': emission_probs,
+            'initial_probs': self.initial_probabilities
+        }
+
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        with open(filepath, 'wb') as f:
+            pickle.dump(model_data, f)
+
+        print(f"Model saved to {filepath}.")
+
+    @classmethod
+    def load(cls, filepath='models/chord_hmm.pkl'):
+        with open(filepath, 'rb') as f:
+            model_data = pickle.load(f)
+
+        model = cls()
+        model.transition_matrix = model_data['transition_probs']
+        model.duration_matrix = model_data['duration_probs']
+        model.emission_matrix = model_data['emission_probs']
+        model.initial_probabilities = model_data['initial_probs']
+
+        return model
+
+    def calc_hidden_state_duration_matrix(self, beat_chords_list: list[list[str]]):
+        """
+        song_notes_dict is the dict of 001
+        want it to look like 'I': {4: 0.05, 3: 0.95}
+        """
+        duration_count = defaultdict(lambda: defaultdict(int))
+        """
+        loop through items, while the next one is same as previous one
+        increment counter. when we see next one is different, save current count to probablity. reset counter to 0
+        """
+
+        # [I, I, I, iv, v, v, N]
+        for curr_chord_sequence in beat_chords_list:
+            duration_counter = 0
+            for i in range(len(curr_chord_sequence)):
+
+                # Last chord in list
+                if i == len(curr_chord_sequence) - 1:
+                    # If last chord is not the same as previous one, then should increment count for '1' only if not 'N' chord
+                    if i > 0 and curr_chord_sequence[i] != 'N' and curr_chord_sequence[i] != curr_chord_sequence[i-1]:
+                        duration_count[curr_chord_sequence[i]][1] += 1
+                    # If last chord is same as previous one, then should increment duration counter only for if non 'N'
+                    elif i > 0 and curr_chord_sequence[i] != 'N' and curr_chord_sequence[i] == curr_chord_sequence[i-1]:
+                        duration_counter += 1
+                        duration_count[curr_chord_sequence[i]][duration_counter] += 1
+                    else:
+                        continue
+                else:
+                    curr_chord = curr_chord_sequence[i]
+                    next_chord = curr_chord_sequence[i+1]
+
+                    if curr_chord == 'N':
+                        continue
+
+                    # End of current chords duration
+                    if next_chord == 'N':
+                        duration_counter += 1
+                        duration_count[curr_chord][duration_counter] += 1
+                        duration_counter = 0
+                        continue
+
+                    if next_chord == curr_chord:
+                        duration_counter += 1
+                    else:
+                        # End of current chord's duration
+                        duration_counter += 1
+                        duration_count[curr_chord][duration_counter] += 1
+                        duration_counter = 0
+        
+        duration_probs = defaultdict(lambda: defaultdict(float))
+        for chord_function in duration_count.keys():
+            total_count = sum(duration_count[chord_function].values())
+            for beat_duration, count in duration_count[chord_function].items():
+                duration_probs[chord_function][beat_duration] = count / total_count
+
+        return duration_probs
+
+    # Want a matrix that contains chord function transition probabilities
+    def calc_hidden_state_transition_matrix(self, beat_chords_list: list[list[str]]):
+        """
+            looks like 'I': {'II': 0.05, 'IV': 0.03}, 'II': {'I':0.01}
+        """
+        transition_count = defaultdict(lambda: defaultdict(int))
+
+        for curr_chord_sequence in beat_chords_list:
+
+            collapsed_chord_sequence = self.collapse_chord_sequence(curr_chord_sequence)
+            for i in range(len(collapsed_chord_sequence)-1):
+                curr_chord = collapsed_chord_sequence[i]
+                next_chord = collapsed_chord_sequence[i+1]
+
+                if curr_chord == 'N' or next_chord == 'N': 
+                    continue
+
+                transition_count[curr_chord][next_chord] += 1
+
+        transition_probs = defaultdict(lambda: defaultdict(float))
+        for curr_chord in transition_count.keys():
+            total_count = sum(transition_count[curr_chord].values())
+            for next_chord, count in transition_count[curr_chord].items():
+                transition_probs[curr_chord][next_chord] = count / total_count
+
+        return transition_probs
+
+    def calc_emission_state_transition_matrix(self, notes: list[TrainingNote]):
+        """
+            want it to be like {'IV': {root: 0.03}}
+        """
+        emission_count = defaultdict(lambda: defaultdict(int))
+
+        for i in range(len(notes)):
+            chord_function = notes[i].get_chord_function()
+            note_chord_tone = notes[i].get_chord_tone()
+
+            emission_count[chord_function][note_chord_tone] += 1
+
+        emission_probs = defaultdict(lambda: defaultdict(float))
+        for chord_function in emission_count.keys():
+            total_count = sum(emission_count[chord_function].values())
+            for note_chord_tone, count in emission_count[chord_function].items():
+                emission_probs[chord_function][note_chord_tone] = count / total_count
+
+        return emission_probs
+
+    def get_note_beat_sequence(self, chord_beat_notes_list):
+        return [(i[0]) for i in chord_beat_notes_list]
+
+    def sample_emission(self, hidden_state):
+        if hidden_state not in self.emission_matrix:
+            raise ValueError("Invalid hidden state")
+
+        emission_notes = list(self.emission_matrix[hidden_state].keys())
+        emission_probs = list(self.emission_matrix[hidden_state].values())
+
+        return emission_notes[np.random.choice(len(emission_notes), p=emission_probs)]
+
+    def sample_hidden_state_duration(self, current_hidden_state):
+        if current_hidden_state not in self.duration_matrix:
+            raise ValueError("Invalid hidden state")
+
+        duration_beats = list(self.duration_matrix[current_hidden_state].keys())
+        duration_probs = list(self.duration_matrix[current_hidden_state].values())
+
+        return duration_beats[np.random.choice(len(duration_beats), p=duration_probs)]
+
+    def sample_next_hidden_state(self, curr_chord):
+        if curr_chord not in self.transition_matrix:
+            raise ValueError("Invalid hidden state")
+
+        next_hidden_states = list(self.transition_matrix[curr_chord].keys())
+        next_hidden_probs = list(self.transition_matrix[curr_chord].values())
+
+        return next_hidden_states[np.random.choice(len(next_hidden_states), p=next_hidden_probs)]
+
+    def train_model(self, song_notes_dict, beat_chords_dict):
+        self.transition_matrix = self.calc_hidden_state_transition_matrix(beat_chords_dict)
+        self.duration_matrix = self.calc_hidden_state_duration_matrix(beat_chords_dict)
+        self.emission_matrix = self.calc_emission_state_transition_matrix(song_notes_dict)
+
+    def generate(self, num_beats):
+        def sample_beats(hidden_state, num_beats):
+            print(f'Sampling {num_beats} for chord {hidden_state}')
+            beats = []
+            for _ in range(num_beats):
+                chord_tone = self.sample_emission(hidden_state)
+                beats.append(SkeletonEmission(chord_tone, 0, hidden_state))
+            return beats
+
+        sampled_chord_function_beat_duration = []
+        sampled_beats = []
+
+        # Sample initial hidden state
+        #hidden_states = list(self.emission_matrix.keys())
+        #hidden_states_probs = list(self.initial_probabilities[state] for state in hidden_states)
+        #current_state = hidden_states[np.random.choice(len(hidden_states), p=hidden_states_probs)]
+        #current_emission = self.sample_emission(current_state)
+
+        # Force first state to be 'I'
+        prev_state = 'I'
+        current_state_duration = self.sample_hidden_state_duration(prev_state)
+        sampled_chord_function_beat_duration.append((prev_state, current_state_duration))
+        sampled_beats.extend(sample_beats(prev_state, current_state_duration))
+
+        while len(sampled_beats) < num_beats:
+            # Sample next hidden state and emission.
+            current_state = self.sample_next_hidden_state(prev_state)
+
+            current_state_duration = self.sample_hidden_state_duration(current_state)
+
+            sampled_chord_function_beat_duration.append((current_state, current_state_duration))
+            sampled_beats.extend(sample_beats(current_state, current_state_duration))
+
+            prev_state = current_state
+
+        return sampled_beats[:num_beats]
+
+    def get_hidden_states(self):
+        return list(self.transition_matrix.keys())
+
+    def collapse_chord_sequence(self, chord_sequence):
+        if len(chord_sequence) <= 1:
+            return chord_sequence
+
+        collapsed_sequence = [chord_sequence[0]]
+        for i in range(1, len(chord_sequence)):
+            if chord_sequence[i] != collapsed_sequence[-1]:
+                collapsed_sequence.append(chord_sequence[i])
+
+        return collapsed_sequence
+
+def get_segments(test_data):
+    segments = []
+    curr_note = test_data[0]
+    curr_chord = curr_note.get_chord_function()
+    curr_emission = curr_note.get_chord_tone()
+    curr_emissions = [curr_emission]
+
+    for note in test_data[1:]:
+        chord = note.get_chord_function()
+        chord_tone = note.get_chord_tone()
+        if chord == curr_chord:
+            curr_emissions.append(chord_tone)
+        else:
+            segments.append((curr_chord, len(curr_emissions), curr_emissions))
+            curr_chord = chord
+            curr_emissions = [chord_tone]
+
+    segments.append((curr_chord, len(curr_emissions), curr_emissions))
+    return segments
+
+def hsmm_log_likelihood(test_data, model):
+    epsilon = 1e-10
+    segments = get_segments(test_data)
+    log_probs = []
+
+    for i, (chord, duration, emissions) in enumerate(segments):
+
+        try:
+            if i >= 2:
+                prev_chord = segments[i - 1][0]
+                prev_prev_chord = segments[i - 2][0]
+                trans_probs = model.transition_matrix[(prev_prev_chord, prev_chord)][chord]
+                log_probs.append(np.log(np.maximum(trans_probs, epsilon)))
+
+            dur_probs = model.duration_matrix[chord][duration]
+            log_probs.append(np.log(np.maximum(dur_probs, epsilon)))
+
+            for emission in emissions:
+                emit_probs = model.emission_matrix[chord][emission]
+                log_probs.append(np.log(emit_probs))
+        except Exception:
+            continue
+
+    return np.mean(log_probs)
+
+def hsmm_log_likelihood_first_order(test_data, model):
+    epsilon = 1e-10
+    segments = get_segments(test_data)
+    log_probs = []
+
+    for i, (chord, duration, emissions) in enumerate(segments):
+
+        try:
+            if i >= 1:
+                prev_chord = segments[i - 1][0]
+                trans_probs = model.transition_matrix[prev_chord][chord]
+                log_probs.append(np.log(np.maximum(trans_probs, epsilon)))
+
+            dur_probs = model.duration_matrix[chord][duration]
+            log_probs.append(np.log(np.maximum(dur_probs, epsilon)))
+
+            for emission in emissions:
+                emit_probs = model.emission_matrix[chord][emission]
+                log_probs.append(np.log(emit_probs))
+        except Exception:
+            continue
+
+    return np.mean(log_probs)
+
+
+if __name__ == "__main__":
+    training_directory = "/home/sachin/Documents/music_generator/POP909_training"
+    training_data = TrainingDataProcessedInfo()
+    training_data.load_training_data(training_directory)
+
+    testing_directory = "/home/sachin/Documents/music_generator/POP909_testing"
+    testing_data = TrainingDataProcessedInfo()
+    testing_data.load_training_data(testing_directory)
+
+    chord_hmm = ChordHMM()
+    chord_hmm.train_model(training_data.notes, training_data.beat_chords)
+    print(hsmm_log_likelihood(testing_data.notes, chord_hmm))
+
+    chord_hmm_first_order = ChordHMMFirstOrder()
+    chord_hmm_first_order.train_model(training_data.notes, training_data.beat_chords)
+    print(hsmm_log_likelihood_first_order(testing_data.notes, chord_hmm_first_order))
+    #chord_hmm = ChordHMM.load()
+    #print(f'first oder: {hsmm_log_likelihood_first_order(data.notes, chord_hmm_first_order)}')
+    #print(f'second oder: {hsmm_log_likelihood(data.notes, chord_hmm)}')
+
+    #chord_hmm = ChordHMM.load()
+    #print(hsmm_log_likelihood(data.notes, chord_hmm))
     #chord_hmm = ChordHMM()
     #chord_hmm.train_model(data.notes, data.beat_chords)
+
+
 
     #chord_hmm.save_model()
     #chord_hmm = ChordHMM.load()
     #print(chord_hmm.transition_matrix)
-    bass = BassNoteGenerator()
-    bass.train_model()
+    #bass = BassNoteGenerator()
+    #bass.train_model()
     #print(bass.emission_probs)
     #bass.save_model()
     #print('loaded model:')

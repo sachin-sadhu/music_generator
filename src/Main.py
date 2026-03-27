@@ -261,7 +261,7 @@ def generate_score(key: KeyTiming, rhythm_sequence: list[int], soprano_notes: li
             treble.append(rest)
 
     score.append(treble)
-    score.write('midi', fp='yesss.mid')
+    score.write('midi', fp='yesssfinal.mid')
     #score.write('lilypond.pdf', fp='mmb')
 
 if __name__ == "__main__":
