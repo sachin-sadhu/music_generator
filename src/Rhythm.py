@@ -349,7 +349,7 @@ def train_markov_chain(train_sequences):
         transition_probs[state] = {k: v/total for k, v in next_states.items()}
     
     return transition_probs
-
+    
 def train_markov_chain_second_order(train_sequences):
     counts = defaultdict(lambda: defaultdict(int))
     
@@ -398,16 +398,16 @@ if __name__ == "__main__":
     #####print(filtered_sequence)
 
     training_set, validation_set, testing_set = split_training_set_validation_set(processed_song_sequences)
-    ##print(f'lenght of training set: {len(training_set)}')
-    ##print(f'lenght of validation set: {len(validation_set)}')
-    ##print(f'lenght of testing set: {len(testing_set)}')
+    #print(f'lenght of training set: {len(training_set)}')
+    #print(f'lenght of validation set: {len(validation_set)}')
+    #print(f'lenght of testing set: {len(testing_set)}')
 
-    #####optimal_num_hidden_states, _ = find_best_num_hidden_states(training_set)
-    #####print(f'optimal number of hidden states: {optimal_num_hidden_states}')
+    ####optimal_num_hidden_states, _ = find_best_num_hidden_states(training_set)
+    ####print(f'optimal number of hidden states: {optimal_num_hidden_states}')
 
-    #test_data_collapsed = np.concatenate(testing_set)
-    #test_data_collapsed = test_data_collapsed.reshape(-1 ,1)
-    #test_data_lengths = [len(sequence) for sequence in testing_set]   
+    test_data_collapsed = np.concatenate(testing_set)
+    test_data_collapsed = test_data_collapsed.reshape(-1 ,1)
+    test_data_lengths = [len(sequence) for sequence in testing_set]   
 
     training_data_collapsed = np.concatenate(training_set)
     training_data_collapsed = training_data_collapsed.reshape(-1 ,1)
@@ -426,26 +426,26 @@ if __name__ == "__main__":
     #print(f'markov second order log likelihood training: {markov_log_likelihood_second_order(training_set, transition_probs_second_order)}')
     #print(f'markov second order log likelihood testing: {markov_log_likelihood_second_order(testing_set, transition_probs_second_order)}')
 
-    #model, _ = train_model(training_set, validation_set, 20, n_iter=1000)
-    #save_model("models/rhythm_model.pkl", model)
+    model, _ = train_model(training_set, validation_set, 15, n_iter=1000)
+    save_model("models/15_hidden_states_rhythm_model.pkl", model)
 
     ##print(f'test log-likelihood: {test_score / sum(test_data_lengths)}')
     #print(model.monitor_)
     #print(f'original model: {model}')
     #print(loglikelihood / (len(validation_data) * len(rhythm_16)))
 
-    model = load_model('models/rhythm_model.pkl')
-    normalised_score = np.array(model.monitor_.history) / sum(training_data_lengths)
-    #test_score = model.score(test_data_collapsed, test_data_lengths)
-    #print(f'training score: {model.monitor_.history[-1] / sum(training_data_lengths)}')
-    #print(f'test log-likelihood: {test_score / sum(test_data_lengths)}')
+    #model = load_model('models/5_hidden_states_rhythm_model.pkl')
+    #normalised_score = np.array(model.monitor_.history) / sum(training_data_lengths)
+    ##test_score = model.score(test_data_collapsed, test_data_lengths)
+    ##print(f'training score: {model.monitor_.history[-1] / sum(training_data_lengths)}')
+    ##print(f'test log-likelihood: {test_score / sum(test_data_lengths)}')
 
     #log_likelihoods = model.monitor_.history
-    plt.plot(normalised_score)
-    plt.xlabel('Iteration')
-    plt.ylabel('Log likelihood')
-    plt.title("HMM Training Log Likelihood")
-    plt.savefig("log_likelihood_plt.png")
+    #plt.plot(normalised_score)
+    #plt.xlabel('Iteration')
+    #plt.ylabel('Negative Log likelihood')
+    #plt.title("HMM Training Negative Log Likelihood (5 hidden states)")
+    #plt.savefig("log_likelihood_plt_5.png")
     #test_score = model.score(test_data_collapsed, test_data_lengths)
 
     #X = generate_rhythm_sequence(256, model)

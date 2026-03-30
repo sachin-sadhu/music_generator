@@ -33,6 +33,7 @@ class Generator:
         sampled_beats = self.chord_progression_hmm.generate(num_notes)
         sampled_beats = sampled_beats[::2]
         sampled_rhythm = generate_rhythm_sequence(num_notes, self.rhythm_model)
+
         print(f'rhythm: {sampled_rhythm}')
         original_sampled_beats = sampled_beats.copy()
         print(sampled_beats[:10])

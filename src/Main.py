@@ -329,7 +329,7 @@ if __name__ == "__main__":
 
     num_notes = 256
     song = Generator(second_order_chord_hmm, ornament_hmms, rhythm_model, bass_model)
-    key = KeyTiming('A:maj')
+    key = KeyTiming('C:maj')
     melody, bass_notes, sampled_beats = song.generate(key, num_notes)
 
     postprocess_melody(melody, key)
@@ -399,7 +399,7 @@ if __name__ == "__main__":
     
     score.append(treble)
     score.append(bass)
-    score.write('midi', fp='a_major_example4.mid')
+    score.write('midi', fp='good_rhythm.mid')
     #score.write('lilypond.pdf', fp='asdflj')
 
     ##cleaned_melody = postprocess_melody(melody_sequence, key)
