@@ -287,6 +287,8 @@ def generate_rhythm_sequence(num_notes, model):
                     for _ in range(beat_duration):
                         sampled_sequence.append(2)
 
+        postprocess_rhythm_sequence(sampled_sequence)
+
     #only return the rhythm for num_notes
     new_notes_seen = 0
     index = 0 
@@ -301,9 +303,15 @@ def generate_rhythm_sequence(num_notes, model):
 
     return sampled_sequence[:index]
 
+def postprocess_rhythm_sequence(sequence):
+    for i, note_event in enumerate(sequence):
+        if i % 8 == 0:
+            if note_event != 0:
+                sequence[i] = 0
+
 def count_num_occurences(sequences):
     occurences = defaultdict(int)
-    for sequence in processed_song_sequences:
+    for sequence in sequences:
         for event in sequence:
             occurences[event] += 1
 
@@ -314,8 +322,16 @@ def count_num_occurences(sequences):
 
     return occurences_probs
 
-def calculate_unigram_baseline(test_sequence, event_probs_dict):
+def calculate_unigram_baseline_testing(test_sequence, event_probs_dict):
     probs = [event_probs_dict[event[0]] for event in test_sequence]
+    normalised_ll = np.mean(np.log(probs))
+    return normalised_ll
+
+def calculate_unigram_baseline_training(train_sequence, event_probs_dict):
+    probs = []
+    for sequence in train_sequence:
+        for event in sequence:
+            probs.append(event_probs_dict[event])
     normalised_ll = np.mean(np.log(probs))
     return normalised_ll
 
@@ -334,6 +350,33 @@ def train_markov_chain(train_sequences):
     
     return transition_probs
 
+def train_markov_chain_second_order(train_sequences):
+    counts = defaultdict(lambda: defaultdict(int))
+    
+    for sequence in train_sequences:
+        for i in range(len(sequence) - 2):
+            counts[(sequence[i], sequence[i+1])][sequence[i+2]] += 1
+    
+    # Convert to probabilities
+    transition_probs = {}
+    for state, next_states in counts.items():
+        total = sum(next_states.values())
+        transition_probs[state] = {k: v/total for k, v in next_states.items()}
+    
+    return transition_probs
+
+def markov_log_likelihood_second_order(test_sequences, transition_probs, smoothing=1e-10):
+    log_probs = []
+    
+    for sequence in test_sequences:
+        sequence = np.array(sequence).flatten()
+        for i in range(len(sequence) - 2):
+            curr, next_chord, next_next_chord = int(sequence[i]), int(sequence[i+1]), int(sequence[i+2])
+            prob = transition_probs.get((curr, next_chord), {}).get(next_next_chord, smoothing)
+            log_probs.append(np.log(prob))
+    
+    return np.mean(log_probs)
+
 def markov_log_likelihood(test_sequences, transition_probs, smoothing=1e-10):
     log_probs = []
     
@@ -347,48 +390,62 @@ def markov_log_likelihood(test_sequences, transition_probs, smoothing=1e-10):
     return np.mean(log_probs)
 
 if __name__ == "__main__":
-    unprocessed_song_sequences = extract_sequences_from_dataset('./POP909')
+    unprocessed_song_sequences = extract_sequences_from_dataset('./POP909/POP909')
     filtered_sequence = [filter_out_beginning_end_rests(sequence) for sequence in unprocessed_song_sequences]
     filtered_sequence = [seq for seq in filtered_sequence if len(seq) > 0]
-    ###print(filtered_sequence)
+    #####print(filtered_sequence)
     processed_song_sequences = [convert_to_num_beats(sequence) for sequence in filtered_sequence]
-    ###print(filtered_sequence)
+    #####print(filtered_sequence)
 
     training_set, validation_set, testing_set = split_training_set_validation_set(processed_song_sequences)
-    print(f'lenght of training set: {len(training_set)}')
-    print(f'lenght of validation set: {len(validation_set)}')
-    print(f'lenght of testing set: {len(testing_set)}')
+    ##print(f'lenght of training set: {len(training_set)}')
+    ##print(f'lenght of validation set: {len(validation_set)}')
+    ##print(f'lenght of testing set: {len(testing_set)}')
 
-    ###optimal_num_hidden_states, _ = find_best_num_hidden_states(training_set)
-    ###print(f'optimal number of hidden states: {optimal_num_hidden_states}')
+    #####optimal_num_hidden_states, _ = find_best_num_hidden_states(training_set)
+    #####print(f'optimal number of hidden states: {optimal_num_hidden_states}')
 
-    test_data_collapsed = np.concatenate(testing_set)
-    test_data_collapsed = test_data_collapsed.reshape(-1 ,1)
-    test_data_lengths = [len(sequence) for sequence in testing_set]   
+    #test_data_collapsed = np.concatenate(testing_set)
+    #test_data_collapsed = test_data_collapsed.reshape(-1 ,1)
+    #test_data_lengths = [len(sequence) for sequence in testing_set]   
+
+    training_data_collapsed = np.concatenate(training_set)
+    training_data_collapsed = training_data_collapsed.reshape(-1 ,1)
+    training_data_lengths = [len(sequence) for sequence in training_set]   
 
     #occurence_probs = count_num_occurences(processed_song_sequences)
-    #print(calculate_unigram_baseline(test_data_collapsed, occurence_probs))
+    #print(f'testing set: {testing_set}')
+    #print(f'unigram baseline training nll: {calculate_unigram_baseline_training(training_set, occurence_probs)}')
+    #print(f'unigram baseline testing nll: {calculate_unigram_baseline_testing(test_data_collapsed, occurence_probs)}')
 
-    #transition_probs = train_markov_chain(processed_song_sequences)
-    #markov_ll = markov_log_likelihood(testing_set, transition_probs)
-    #print(markov_ll)
-    model, _ = train_model(training_set, validation_set, 20, n_iter=1000)
-    save_model("models/rhythm_model.pkl", model)
+    #transition_probs = train_markov_chain(training_set)
+    #print(f'markov log likelihood training: {markov_log_likelihood(training_set, transition_probs)}')
+    #print(f'markov log likelihood testing: {markov_log_likelihood(testing_set, transition_probs)}')
 
-    #print(f'test log-likelihood: {test_score / sum(test_data_lengths)}')
-    print(model.monitor_)
+    #transition_probs_second_order = train_markov_chain_second_order(training_set)
+    #print(f'markov second order log likelihood training: {markov_log_likelihood_second_order(training_set, transition_probs_second_order)}')
+    #print(f'markov second order log likelihood testing: {markov_log_likelihood_second_order(testing_set, transition_probs_second_order)}')
+
+    #model, _ = train_model(training_set, validation_set, 20, n_iter=1000)
+    #save_model("models/rhythm_model.pkl", model)
+
+    ##print(f'test log-likelihood: {test_score / sum(test_data_lengths)}')
+    #print(model.monitor_)
     #print(f'original model: {model}')
     #print(loglikelihood / (len(validation_data) * len(rhythm_16)))
 
-    #model = load_model('rhythm_model.pkl')
+    model = load_model('models/rhythm_model.pkl')
+    normalised_score = np.array(model.monitor_.history) / sum(training_data_lengths)
     #test_score = model.score(test_data_collapsed, test_data_lengths)
+    #print(f'training score: {model.monitor_.history[-1] / sum(training_data_lengths)}')
     #print(f'test log-likelihood: {test_score / sum(test_data_lengths)}')
+
     #log_likelihoods = model.monitor_.history
-    #plt.plot(log_likelihoods)
-    #plt.xlabel('Iteration')
-    #plt.ylabel('Log likelihood')
-    #plt.title("HMM Training Log Likelihood")
-    #plt.savefig("log_likelihood_plt.png")
+    plt.plot(normalised_score)
+    plt.xlabel('Iteration')
+    plt.ylabel('Log likelihood')
+    plt.title("HMM Training Log Likelihood")
+    plt.savefig("log_likelihood_plt.png")
     #test_score = model.score(test_data_collapsed, test_data_lengths)
 
     #X = generate_rhythm_sequence(256, model)

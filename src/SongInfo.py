@@ -51,13 +51,16 @@ class SongInfo:
         active_notes = {}
         current_tick = 0
 
-        for msg in midi.tracks[3]:
+        for msg in midi.tracks[1]:
             current_tick += msg.time
             #current_seconds = ticks_to_seconds(current_tick, ticks_per_beat, tempo)
             current_seconds = tick2second(current_tick, ticks_per_beat, tempo)
 
             # Note is being played
-            if msg.type == 'note_on' and msg.velocity > 0:
+            if msg.type == 'set_tempo':
+                tempo = msg.tempo
+
+            elif msg.type == 'note_on' and msg.velocity > 0:
                 active_notes[msg.note] = {
                     'pitch': msg.note,
                     'start_tick': current_tick,

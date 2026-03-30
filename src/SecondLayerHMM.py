@@ -35,6 +35,11 @@ class Generator:
         sampled_rhythm = generate_rhythm_sequence(num_notes, self.rhythm_model)
         print(f'rhythm: {sampled_rhythm}')
         original_sampled_beats = sampled_beats.copy()
+        print(sampled_beats[:10])
+
+        for i in range(10):
+            note = sampled_beats[i]
+            print(f'note chord tone: {note.note_chord_tone}. chord function: {note.chord_function}')
 
         i = 0
         while i < len(sampled_rhythm):
@@ -63,16 +68,16 @@ class Generator:
 
                     # Generate cooresponding bass note
                     bass_note_chord_tone = self.bass_generator.get_bass_note(skeleton_note.note_chord_tone)
-                    bass_note_midi_pitch = SkeletonEmission(bass_note_chord_tone, 0, skeleton_note.chord_function).calc_midi_pitch(key) - 24
+                    print(f' skeleton note: chord function: {skeleton_note.chord_function} trelle chord tone: {skeleton_note.note_chord_tone} bass note chord tone: {bass_note_chord_tone}')
+                    bass_note_midi_pitch = SkeletonEmission(bass_note_chord_tone, 0, skeleton_note.chord_function).calc_midi_pitch(key) - 12
                     bass.append((bass_note_midi_pitch, i))
-                    print(f'adding a bass note to index {i}. cooresponding treble index {i}, pithc: {midi_pitch}')
                 elif sampled_rhythm[i] == 1 or sampled_rhythm[i] == 2:
                     # Sustaining previous note or rest on this strong beat
                     if sampled_beats:
                         skeleton_note = sampled_beats.pop(0)
                         # Generate cooresponding bass note
                         bass_note_chord_tone = self.bass_generator.get_bass_note(skeleton_note.note_chord_tone)
-                        bass_note_midi_pitch = SkeletonEmission(bass_note_chord_tone, 0, skeleton_note.chord_function).calc_midi_pitch(key) - 24
+                        bass_note_midi_pitch = SkeletonEmission(bass_note_chord_tone, 0, skeleton_note.chord_function).calc_midi_pitch(key) - 12
                         bass.append((bass_note_midi_pitch, i))
             else:
                 # need an ornament note first check to see whether we need to generate a new note or note
@@ -88,7 +93,6 @@ class Generator:
                             previous_skeleton_note_chord_function = previous_skeleton_note['chord_function']
                             next_skeleton_note = self.find_next_skeleton_note(i, sampled_beats, sampled_rhythm)
                             next_skeleton_note_pitch = next_skeleton_note.calc_midi_pitch(key)
-                            print(f'found both')
                         except ValueError as e:
                             # Default to 0 offset and setting previous chord function to 'I'
                             print(e)
@@ -104,13 +108,11 @@ class Generator:
                                 skeleton_offset = previous_skeleton_note_pitch - next_skeleton_note_pitch 
                                 ornament_mc = self.ornament_note_mcs.mcs[skeleton_offset]
                                 ornament_note_offset = ornament_mc.generate(previous_skeleton_note_index, i)
-                            except ValueError as e:
-                                print(e)
+                            except Exception:
                                 ornament_note_offset = 0
 
                             if len(melody) > 0:
                                 midi_pitch = melody[-1]['pitch'] + ornament_note_offset
-                                print(f'current midi_pitch: {midi_pitch}')
                                 #midi_pitch = max(40, min(midi_pitch, 80))
                             else:
                                 midi_pitch = previous_skeleton_note_pitch

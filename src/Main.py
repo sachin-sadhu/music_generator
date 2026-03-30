@@ -242,8 +242,7 @@ def postprocess_melody(notes, key):
     tritone = TRITONES.get(key_name)
     
     for note in notes:
-        pitch_class = note['pitch'] % 12  # Get note within one octave
-        
+        pitch_class = note['pitch'] % 12
         # Check if its tritone
         if pitch_class == tritone:
             # Move tritone to nearest safe note
@@ -262,19 +261,9 @@ def postprocess_melody(notes, key):
             # Find nearest note in scale
             distances = [(abs(pitch_class - allowed), allowed) for allowed in allowed_notes]
             distances.sort(key=lambda x: x[0])
-            
+
             nearest_note = distances[0][1]
-            pitch_adjustment = nearest_note - pitch_class
-            
-            # Handle octave wrapping
-            if abs(pitch_adjustment) > 6:
-                pitch_adjustment = 12 - abs(pitch_adjustment)
-                if pitch_adjustment < 0:
-                    pitch_adjustment = -pitch_adjustment
-                    
-            corrected_pitch = note['pitch'] + pitch_adjustment
-            note['pitch'] = corrected_pitch
-            print(f"Fixed chromatic note: {note['pitch']} -> {corrected_pitch}")
+            note['pitch'] = nearest_note
 
 def generate_score(key: KeyTiming, rhythm_sequence: list[int], soprano_notes: list[str], bass_notes: list[str]):
     score = stream.Score()
@@ -322,7 +311,7 @@ def generate_score(key: KeyTiming, rhythm_sequence: list[int], soprano_notes: li
             treble.append(rest)
 
     score.append(treble)
-    score.write('midi', fp='c_major.mid')
+    score.write('midi', fp='a_major.mid')
     #score.write('lilypond.pdf', fp='mmb')
 
 if __name__ == "__main__":
@@ -332,7 +321,7 @@ if __name__ == "__main__":
 
     #chord_beat_hmm = HMM()
     #chord_beat_hmm.train_model(data.notes, data.beat_chords)
-    second_order_chord_hmm = ChordHMM.load('models/second_order_hmm.pkl')
+    second_order_chord_hmm = ChordHMM.load('models/chord_second_order.pkl')
     #first_order_chord_hmm = ChordHMMFirstOrder.load('models/first_order_hmm.pkl')
     ornament_hmms = OrnamentNoteMCs.load()
     bass_model = BassNoteGenerator.load_model()
@@ -340,13 +329,10 @@ if __name__ == "__main__":
 
     num_notes = 256
     song = Generator(second_order_chord_hmm, ornament_hmms, rhythm_model, bass_model)
-    key = KeyTiming('C:maj')
+    key = KeyTiming('A:maj')
     melody, bass_notes, sampled_beats = song.generate(key, num_notes)
-    print(f'melody: {melody}')
-    print(f'bass notes: {bass_notes}')
 
     postprocess_melody(melody, key)
-    fixed_bass_notes = postprocess_bass(bass_notes, key)
 
     score = stream.Score()
 
@@ -364,13 +350,10 @@ if __name__ == "__main__":
         n = note.Note(pitch)
         n.quarterLength = 2
         bass.append(n)
-        print(f'creating a note at onset: {onset}')
 
         _, next_note_onset = bass_notes[i+1]
         if next_note_onset != (onset + 8):
-            print(f'next note at {next_note_onset}')
             rest_duration = next_note_onset - onset - 8
-            print(f'rest duration of {rest_duration}')
             r = note.Rest()
             r.quarterLength = rest_duration / 4
             bass.append(r)
@@ -402,7 +385,6 @@ if __name__ == "__main__":
         if next_note['start'] != curr_note['end']:
             # Need a rest!
             rest_duration = next_note['start'] - curr_note['end']
-            print(f'need a rest: {rest_duration}')
             r = note.Rest()
             r.quarterLength = rest_duration / 4
             treble.append(r)
@@ -414,11 +396,10 @@ if __name__ == "__main__":
     duration = last_note['end'] - last_note['start']
     n.quarterLength = duration / 4  # Duration in quarter notes
     treble.append(n)
-
+    
     score.append(treble)
     score.append(bass)
-    score.writedirectory = "/home/sachin/Documents/music_generator/POP909/POP909"
-    #('midi', fp='final_eval_c_major_second_order.mid')
+    score.write('midi', fp='a_major_example4.mid')
     #score.write('lilypond.pdf', fp='asdflj')
 
     ##cleaned_melody = postprocess_melody(melody_sequence, key)
