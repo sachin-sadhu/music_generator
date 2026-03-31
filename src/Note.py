@@ -116,63 +116,11 @@ class TrainingNote:
         except Exception:
             return 0
 
-    def is_chord_triad(self):
-        """
-        Determines if a given note pitch is a chord tone of the specified chord.
-
-        Args:
-            note_pitch (int): The MIDI pitch number of the note to check.
-            chord_name (str): The name of the chord in the format 'Root:quality' 
-                            (e.g., 'C:maj', 'A:min', 'G:7').
-
-        Returns:
-            bool: True if the note pitch is a chord tone of the specified chord, 
-                False otherwise.
-
-        Raises:
-            ValueError: If the chord_name is not found in the CHORD_TEMPLATES dictionary.
-
-        Note:
-            The function uses pitch class (pitch % 12) to determine if a note belongs
-            to a chord, making it octave-invariant.
-        """
-        CHORD_TEMPLATES = {
-            'C:maj': [0, 4, 7],
-            'C:min': [0, 3, 7],
-            'D:min': [2, 5, 9],
-            'D:maj': [2, 6, 9],
-            'E:min': [4, 7, 11],
-            'E:maj': [4, 8, 11],
-            'F:maj': [5, 9, 0],
-            'F:min': [5, 8, 0],
-            'G:maj': [7, 11, 2],
-            'G:min': [7, 10, 2],
-            'A:min': [9, 0, 4],
-            'A:maj': [9, 1, 4],
-            'B:min': [11, 2, 6],
-            'B:maj': [11, 3, 6],
-            'B:dim': [11, 2, 5],
-            'G:7': [7, 11, 2, 5]
-        }
-
-        chord_name = self.chord.chord_name
-
-        if chord_name not in CHORD_TEMPLATES:
-            raise ValueError(f"Invalid chord name: {chord_name} ")
-
-        return self.pitch_class in CHORD_TEMPLATES[chord_name]
-
     def is_note_on_beat(self, beat_timings: list[BeatTiming], threshold=0.05) -> bool:
         for beat in beat_timings:
             if abs(beat.get_onset_time() - self.start_seconds) <= threshold:
                 return True
         return False
-
-class GeneratedNote:
-    def __init__(self, midi_pitch, duration, chord):
-        self.midi_pitch = midi_pitch
-        self.duration = duration
-        self.chord = chord
 
 class OrnamentNote:
     def __init__(self, note_offset):
@@ -186,3 +134,7 @@ class OrnamentGrouping:
 
     def get_group_note_interval(self):
         return self.first_skeleton_note.get_midi_pitch() - self.second_skeleton_note.get_midi_pitch()
+
+class OrnamentEmission:
+    def __init__(self, offset):
+        self.offset = offset
