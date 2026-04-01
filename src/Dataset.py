@@ -3,7 +3,6 @@ import os
 from collections import Counter
 import matplotlib.pyplot as plt
 
-
 def get_key_counter(dataset_path, save_path='models/key_counter.pkl'):
     all_keys = []
 
