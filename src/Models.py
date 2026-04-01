@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from SongInfo import TrainingDataProcessedInfo, OrnamentGrouping, OrnamentNote
 from music21 import corpus, instrument
+from Rhythm import RhythmHMM
+from music21 import stream, note, tempo, instrument
 
 if TYPE_CHECKING:
     from Note import TrainingNote
@@ -16,7 +18,460 @@ import pickle
 import os
 import pandas as pd
 
-class BassNoteGenerator:
+"""
+    Model reponsible for generating ornament notes. 
+    Contains a list of dictionaries maping from pitch offset to markov chains.
+"""
+class OrnamentNoteMCs:
+    def __init__(self):
+        self.mcs = {}
+
+    def save_model(self, filepath='models/ornament_mcs.pkl'):
+        with open(filepath, 'wb') as f:
+            pickle.dump(self, f)
+
+    @classmethod
+    def load(cls, filepath='models/ornament_mcs.pkl'):
+        with open(filepath, 'rb') as f:
+            return pickle.load(f)
+
+    """
+        Splits a list of ornament groupings into a dictionary to be used for training
+        data for each offset.
+    """
+    def split_song_ornaments(self, ornament_groupings: list[OrnamentGrouping]):
+        offset_function_dict = defaultdict(list)
+
+        for grouping in ornament_groupings:
+            note_offset = grouping.get_group_note_interval()
+            offset_function_dict[note_offset].append(grouping)
+
+        return offset_function_dict
+
+    def train_mcs(self, training_data: list[OrnamentGrouping]):
+        offset_training_data = self.split_song_ornaments(training_data)
+        for offset, training_data in offset_training_data.items():
+            mc = OrnamentMC()
+            succ_train = mc.train_mc(training_data)
+            if succ_train:
+                self.mcs[offset] = mc
+
+"""
+Individual first-order Markov Chain for a particular skeleton offset
+"""
+class OrnamentMC:
+    def __init__(self):
+        self.transition_matrix = {}
+        self.initial_probabilities = {}
+        self.recent_index_used = -1
+        self.recent_offset = None
+
+    """
+        Train initial emissions
+    """
+    def calc_initial_probabilities(self, ornament_groupings: list[OrnamentGrouping]):
+        initial_count = defaultdict(int)
+
+        for grouping in ornament_groupings:
+            if len(grouping.ornament_notes) == 0:
+                continue
+            initial_note_offset = grouping.ornament_notes[0].offset
+            initial_count[initial_note_offset] += 1
+
+        initial_probs = {}
+        total_count = sum(initial_count.values())
+        for initial_emission, count in initial_count.items():
+            initial_probs[initial_emission] = count / total_count
+
+        return initial_probs
+
+    """
+        Train state transistion probabilities
+    """
+    def calc_transition_matrix(self, ornament_groupings: list[OrnamentGrouping]):
+        transition_count = defaultdict(lambda: defaultdict(int))
+
+        for grouping in ornament_groupings:
+            # No ornament notes
+            if len(grouping.ornament_notes) == 0:
+                continue
+
+            for i in range(len(grouping.ornament_notes)-1):
+                curr_note_offset = grouping.ornament_notes[i].offset
+                next_note_offset = grouping.ornament_notes[i+1].offset
+                transition_count[curr_note_offset][next_note_offset] += 1
+
+        if len(transition_count) == 0:
+            print('no training data')
+
+        transition_probs = {}
+        for current_offset in transition_count.keys():
+            total_count = sum(transition_count[current_offset].values())
+            for next_offset, count in transition_count[current_offset].items():
+                if current_offset not in transition_probs:
+                    transition_probs[current_offset] = {}
+                transition_probs[current_offset][next_offset] = count / total_count
+
+        return transition_probs
+
+    """
+        Generate a new offset
+    """
+    def sample_next_offset(self, current_offset):
+        if current_offset not in self.transition_matrix:
+            raise ValueError("Invalid offset.")
+
+        next_offsets = list(self.transition_matrix[current_offset].keys())
+        offsets_probs = list(self.transition_matrix[current_offset].values())
+
+        return np.random.choice(next_offsets, p=offsets_probs)
+
+    def sample_initial_state(self):
+        offsets = list(self.initial_probabilities.keys())
+        probs = list(self.initial_probabilities.values())
+        return np.random.choice(offsets, p=probs)
+
+    def train_mc(self, ornament_groupings: list[OrnamentGrouping]):
+        try:
+            self.transition_matrix = self.calc_transition_matrix(ornament_groupings)
+            self.initial_probabilities = self.calc_initial_probabilities(ornament_groupings)
+            return True
+        except ValueError as e:
+            print(f'Error training model: {e}')
+            return False
+
+    def generate(self, skeleton_note_index, current_note_index):
+        # Last time this MC was used was before current skeleotn note index. therefore need to sample new note
+        print(f'last time mc was used was {self.recent_index_used}. current skeelton note index: {skeleton_note_index}. current note index: {current_note_index}')
+        if self.recent_index_used < skeleton_note_index:
+            emission = self.sample_initial_state()
+            print(f'sampling from initila')
+        else:
+            emission = self.sample_next_offset(self.recent_offset)
+            print(f'sampling from old one')
+
+        print(f'note emission: {emission}')
+        self.recent_index_used = current_note_index
+        self.recent_offset = emission
+
+        return emission
+
+"""
+    User facing class that will be called to generate a piece of music.
+"""
+class MusicGen:
+    def __init__(self, chord_progression_hmm: ChordHMM, ornament_mcs: OrnamentNoteMCs, rhythm_model: RhythmHMM, bass_generator: BassNoteGenerator):
+        self.chord_progression_hmm = chord_progression_hmm
+        self.ornament_note_mcs = ornament_mcs
+        self.rhythm_model = rhythm_model
+        self.bass_generator = bass_generator
+        self.fixed_ornament_note_pitches = {}
+
+    """
+        Function that will be called by main to actually generate the piece.
+    """
+    def generate_midi_score(self, key, num_notes, file_output='output.mid'):
+        melody, bass_notes, _ = self.generate_lines(key, num_notes)
+        score = stream.Score()
+        treble = stream.Part()
+        treble.append(instrument.Piano())
+        treble.append(tempo.MetronomeMark(number=80))
+        bass = stream.Part()
+        bass.append(instrument.Piano())
+
+        # Add bass notes
+        for i in range(len(bass_notes)-1):
+            pitch, onset = bass_notes[i]
+            n = note.Note(pitch)
+            n.quarterLength = 2
+            bass.append(n)
+
+            _, next_note_onset = bass_notes[i+1]
+            if next_note_onset != (onset + 8):
+                rest_duration = next_note_onset - onset - 8
+                r = note.Rest()
+                r.quarterLength = rest_duration / 4
+                bass.append(r)
+
+        # Add last bass note
+        pitch, _ = bass_notes[-1]
+        n = note.Note(pitch)
+        n.quarterLength = 2
+        bass.append(n)
+
+        # Add melody notes to treble clef
+        for i in range(len(melody)-1):
+            curr_note = melody[i]
+            pitch = curr_note['pitch']
+            n = note.Note(pitch)
+            duration = curr_note['end'] - curr_note['start']
+            n.quarterLength = duration / 4  # Duration in quarter notes
+            treble.append(n)
+
+            next_note = melody[i+1]
+            if next_note['start'] != curr_note['end']:
+                # Need a rest!
+                rest_duration = next_note['start'] - curr_note['end']
+                r = note.Rest()
+                r.quarterLength = rest_duration / 4
+                treble.append(r)
+
+        # Add last treble clef note
+        last_note = melody[-1]
+        pitch = last_note['pitch']
+        n = note.Note(pitch)
+        duration = last_note['end'] - last_note['start']
+        n.quarterLength = duration / 4  # Duration in quarter notes
+        treble.append(n)
+        
+        score.append(treble)
+        score.append(bass)
+        score.write('midi', fp=file_output)
+
+    def generate_lines(self, key, num_notes):
+        melody = []
+        bass = []
+
+        sampled_beats = self.chord_progression_hmm.generate(num_notes)
+        sampled_beats = sampled_beats[::2]
+        sampled_rhythm = self.rhythm_model.generate_rhythm_sequence(num_notes)
+
+        print(f'rhythm: {sampled_rhythm}')
+        original_sampled_beats = sampled_beats.copy()
+        print(sampled_beats[:10])
+
+        for i in range(10):
+            note = sampled_beats[i]
+            print(f'note chord tone: {note.note_chord_tone}. chord function: {note.chord_function}')
+
+        i = 0
+        while i < len(sampled_rhythm):
+            #current_time = i * seconds_per_step
+            ## Check if on strong beat position
+            if i % 8 == 0:
+                ## Need to start playing a fresh note
+                if sampled_rhythm[i] == 0:
+                    # Check if ornament note or skeelton note
+                    end_index = i + 1
+                    while (end_index < len(sampled_rhythm) and sampled_rhythm[end_index] == 1):
+                        end_index += 1
+
+                    # Skeleton note
+                    # create MIDI note
+                    skeleton_note = sampled_beats.pop(0)
+                    midi_pitch = skeleton_note.calc_midi_pitch(key)
+                    chord_function = skeleton_note.chord_function
+                    note = {
+                        'pitch': midi_pitch,
+                        'start': i,
+                        'end': end_index,
+                        'chord_function': chord_function
+                    }
+                    melody.append(note)
+
+                    # Generate cooresponding bass note
+                    bass_note_chord_tone = self.bass_generator.get_bass_note(skeleton_note.note_chord_tone)
+                    print(f' skeleton note: chord function: {skeleton_note.chord_function} trelle chord tone: {skeleton_note.note_chord_tone} bass note chord tone: {bass_note_chord_tone}')
+                    bass_note_midi_pitch = SkeletonEmission(bass_note_chord_tone, skeleton_note.chord_function).calc_midi_pitch(key) - 12
+                    bass.append((bass_note_midi_pitch, i))
+                elif sampled_rhythm[i] == 1 or sampled_rhythm[i] == 2:
+                    # Sustaining previous note or rest on this strong beat
+                    if sampled_beats:
+                        skeleton_note = sampled_beats.pop(0)
+                        # Generate cooresponding bass note
+                        bass_note_chord_tone = self.bass_generator.get_bass_note(skeleton_note.note_chord_tone)
+                        bass_note_midi_pitch = SkeletonEmission(bass_note_chord_tone, skeleton_note.chord_function).calc_midi_pitch(key) - 12
+                        bass.append((bass_note_midi_pitch, i))
+            else:
+                # need an ornament note first check to see whether we need to generate a new note or note
+                if sampled_rhythm[i] == 0:
+                    # check to see if ornament note pitch has already been decided
+                    if i in self.fixed_ornament_note_pitches:
+                        midi_pitch = self.fixed_ornament_note_pitches[i].calc_midi_pitch(key)
+                        chord_function = self.fixed_ornament_note_pitches[i].chord_function
+                    else:
+                        try:
+                            previous_skeleton_note, previous_skeleton_note_index = self.find_previous_skeleton_note(i, melody, sampled_rhythm)
+                            previous_skeleton_note_pitch = previous_skeleton_note['pitch']
+                            previous_skeleton_note_chord_function = previous_skeleton_note['chord_function']
+                            next_skeleton_note = self.find_next_skeleton_note(i, sampled_beats, sampled_rhythm)
+                            next_skeleton_note_pitch = next_skeleton_note.calc_midi_pitch(key)
+                        except ValueError as e:
+                            # Default to 0 offset and setting previous chord function to 'I'
+                            print(e)
+                            next_skeleton_note_pitch = 60
+                            previous_skeleton_note_pitch = 60
+                            previous_skeleton_note_index = 0
+
+                        # Check if this note is the note that sutains onto the next strong beat note
+                        if i in self.fixed_ornament_note_pitches:
+                            midi_pitch = self.fixed_ornament_note_pitches[i].calc_midi_pitch(key)
+                        else:
+                            try:
+                                skeleton_offset = previous_skeleton_note_pitch - next_skeleton_note_pitch 
+                                ornament_mc = self.ornament_note_mcs.mcs[skeleton_offset]
+                                ornament_note_offset = ornament_mc.generate(previous_skeleton_note_index, i)
+                            except Exception:
+                                ornament_note_offset = 0
+
+                            if len(melody) > 0:
+                                midi_pitch = melody[-1]['pitch'] + ornament_note_offset
+                                #midi_pitch = max(40, min(midi_pitch, 80))
+                            else:
+                                midi_pitch = previous_skeleton_note_pitch
+
+                    end_index = i + 1
+                    while (end_index < len(sampled_rhythm) and sampled_rhythm[end_index] == 1):
+                        end_index += 1
+
+                    note = {
+                        'pitch': midi_pitch,
+                        'start': i,
+                        'end': end_index,
+                        'chord_function': chord_function
+                    }
+                    melody.append(note)
+            i += 1
+
+        self.postprocess_melody(melody, key)
+        return melody, bass, original_sampled_beats
+
+    """
+        Returns the pitch and chord function of the next skeleton note
+    """
+    def find_next_skeleton_note(self, current_index, skeleton_notes, sampled_rhythm):
+        # first find out index of next skeleton note
+        next_strong_beat_index = current_index + 1
+        found_strong_beat = False
+        while (not found_strong_beat and next_strong_beat_index < len(sampled_rhythm)):
+            if next_strong_beat_index % 8 == 0:
+                found_strong_beat = True
+                break
+            else:
+                next_strong_beat_index += 1
+
+        if not found_strong_beat:
+            raise ValueError("no next strong beat found")
+
+        # Note being generated at the strong beat
+        if sampled_rhythm[next_strong_beat_index] == 0:
+            return skeleton_notes[0]
+        elif sampled_rhythm[next_strong_beat_index] == 1:
+            # note is being sustained, figure out index of note that will sustain it
+            sustained_note_index = next_strong_beat_index-1
+            while sustained_note_index >= 0:
+                if sampled_rhythm[sustained_note_index] == 0:
+                    break
+                else:
+                    sustained_note_index -= 1
+            self.fixed_ornament_note_pitches[sustained_note_index] = skeleton_notes[0]
+        else:
+            raise ValueError("rest being played at skeleton note.")
+        
+        return skeleton_notes[0]
+
+    """ 
+        issue right now is that sound playing at previous skeleton note might not be played 
+        exactly on a skeleton note
+
+        so to find the pitch, we should search backwards to find out which index is responsible for
+        that not being played. then we can search for whichever note was generated at that index what the pitch is
+        can find index by doing start / seconds_per_step
+    """
+    def find_previous_skeleton_note(self, current_index, current_melody, sampled_rhythm):
+        # search backwards and find most recent strong beat index
+        recent_strong_beat_index = current_index - 1
+        found_strong_beat = False
+        while (not found_strong_beat and recent_strong_beat_index >= 0):
+            if recent_strong_beat_index % 8 == 0:
+                found_strong_beat = True
+                break
+            else:
+                recent_strong_beat_index -= 1
+
+        if not found_strong_beat:
+            raise ValueError("no previous skeleton note found")
+
+        # Check if this strong beat was a 1 (new note) or 2 (sustained pitch from previous note)
+        if sampled_rhythm[recent_strong_beat_index] == 0:
+            for note in reversed(current_melody):
+                if note['start'] == recent_strong_beat_index:
+                    return note, recent_strong_beat_index
+        elif sampled_rhythm[recent_strong_beat_index] == 1:
+            # note was sustained from somewhere else, need to find note responsible for it 
+            # by searching to the left somemore for the most recent 1 note
+            recent_new_note_index = recent_strong_beat_index - 1
+            found_new_note = False
+            while (not found_new_note and recent_new_note_index >= 0):
+                if sampled_rhythm[recent_new_note_index] == 1:
+                    found_new_note = True
+                    break
+                else:
+                    recent_new_note_index -= 1
+            
+            if not found_new_note:
+                raise ValueError("no previous skeleton note found")
+            
+            for note in reversed(current_melody):
+                if note['start'] == recent_new_note_index:
+                    return note, recent_strong_beat_index
+
+        raise ValueError("no previous skeleton note found")
+
+    def postprocess_melody(self, notes, key):
+        """
+        Clean up generated melody by avoiding really bad notes.
+        """
+
+        key_name = key.name
+        # Define key scales (notes to keep)
+        KEY_SCALES = {
+            'A:maj': [9, 11, 1, 2, 4, 6, 8],      # A, B, C#, D, E, F#, G#
+            'C:maj': [0, 2, 4, 5, 7, 9, 11],      # C, D, E, F, G, A, B
+            'D:maj': [2, 4, 6, 7, 9, 11, 1],      # D, E, F#, G, A, B, C#
+            'G:maj': [7, 9, 11, 0, 2, 4, 6],      # G, A, B, C, D, E, F#
+            # Add more keys as needed
+        }
+        
+        # Define tritones from tonic (notes to absolutely avoid)
+        TRITONES = {
+            'A:maj': 3,   # D#/Eb
+            'C:maj': 6,   # F#/Gb  
+            'D:maj': 8,   # G#/Ab
+            'G:maj': 1,   # C#/Db
+        }
+        
+        if key_name not in KEY_SCALES:
+            return notes  # Skip processing if key not defined
+        
+        allowed_notes = set(KEY_SCALES[key_name])
+        tritone = TRITONES.get(key_name)
+        
+        for note in notes:
+            pitch_class = note['pitch'] % 12
+            # Check if its tritone
+            if pitch_class == tritone:
+                # Move tritone to nearest safe note
+                if tritone + 1 in allowed_notes:
+                    corrected_pitch = note['pitch'] + 1
+                elif tritone - 1 in allowed_notes:
+                    corrected_pitch = note['pitch'] - 1
+                else:
+                    corrected_pitch = note['pitch'] + 2  # Fallback
+                
+                print(f"Fixed tritone: {note['pitch']} -> {corrected_pitch}")
+                note['pitch'] = corrected_pitch
+                
+            # Check if it's outside the key scale
+            elif pitch_class not in allowed_notes:
+                # Find nearest note in scale
+                distances = [(abs(pitch_class - allowed), allowed) for allowed in allowed_notes]
+                distances.sort(key=lambda x: x[0])
+
+                nearest_note = distances[0][1]
+                note['pitch'] = nearest_note
+
+class BassGen:
     def __init__(self):
         self.emission_probs = {}
 
@@ -145,7 +600,7 @@ class BassNoteGenerator:
         return interval_map.get(interval, 'root')
 
 class SkeletonEmission:
-    def __init__(self, note_chord_tone, octave_offset, chord_function):
+    def __init__(self, note_chord_tone, chord_function):
         self.note_chord_tone = note_chord_tone
         self.octave_offset = 4
         self.chord_function = chord_function
@@ -186,11 +641,6 @@ class SkeletonEmission:
         key_pitch_class = note_to_pitch_class.get(key_root_note, 0)
         chord_pitch_class = (key_pitch_class + roman_numeral_to_semitones.get(self.chord_function, 0)) % 12
         interval = chromatic_intervals_inverted.get(self.note_chord_tone, 0)
-
-        #key_root_note_midi_pitch = 60 + note_to_pitch_class.get(key_root_note, 0)
-        #chord_root_note_midi_pitch = key_root_note_midi_pitch + roman_numeral_to_semitones.get(self.chord_function, 0)
-        #interval = chromatic_intervals_inverted.get(self.note_chord_tone, 0)
-
         note_midi_pitch = (self.octave_offset + 1) * 12 + chord_pitch_class + interval
 
         return note_midi_pitch
@@ -638,7 +1088,7 @@ class ChordHMM:
             beats = []
             for _ in range(num_beats):
                 chord_tone = self.sample_emission(hidden_state)
-                beats.append(SkeletonEmission(chord_tone, 0, hidden_state))
+                beats.append(SkeletonEmission(chord_tone, hidden_state))
             return beats
 
         sampled_chord_function_beat_duration = []

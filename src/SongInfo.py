@@ -1,5 +1,4 @@
 from mido import MidiFile, tick2second
-from Helper import quantise_beat_duration
 from Note import TrainingNote, OrnamentGrouping, OrnamentNote
 from ChordFunctions import *
 from Timings import BeatTiming, ChordTiming, KeyTiming
@@ -53,7 +52,6 @@ class SongInfo:
 
         for msg in midi.tracks[1]:
             current_tick += msg.time
-            #current_seconds = ticks_to_seconds(current_tick, ticks_per_beat, tempo)
             current_seconds = tick2second(current_tick, ticks_per_beat, tempo)
 
             # Note is being played
@@ -76,7 +74,7 @@ class SongInfo:
                     tick_onset = curr_note['start_tick']
                     tick_duration = current_tick - tick_onset
                     beat_duration = tick_duration / ticks_per_beat
-                    note_duration = quantise_beat_duration(beat_duration)
+                    note_duration = self.quantise_beat_duration(beat_duration)
                     clef = 'treble' if msg.note >= 60 else 'bass'
                     chord = get_event_matching_chord(seconds_onset, self.chord_timings)
 
@@ -86,6 +84,32 @@ class SongInfo:
                     del active_notes[msg.note]
 
         return notes
+
+    def quantise_beat_duration(self, beat_duration, grid_size=0.25, max_duration=4.0):
+        """
+        Quantise a beat duration to the nearest musical note value.
+
+        Args:
+            beat_duration (float): The duration of the beat to quantise, in beats.
+            grid_size (float, optional): The grid size for quantisation. Defaults to 0.5.
+            max_duration (float, optional): The maximum allowed duration. Defaults to 4.0.
+
+        Returns:
+            str: The name of the musical note value (e.g., 'crotchet', 'quaver', 'semibreve')
+                that best represents the quantised beat duration.
+        """
+        DURATION_BINS = [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 2.5, 3.5, 4.0]
+
+        quantised = round(beat_duration / grid_size) * grid_size
+
+        if quantised < grid_size:
+            quantised = grid_size
+        if quantised > max_duration:
+            quantised = max_duration
+
+        closest = min(DURATION_BINS, key=lambda x: abs(x-quantised))
+        return closest
+
 
     def load_beat_timings(self, beat_file_path) -> list[BeatTiming]:
         beats = []
@@ -140,11 +164,6 @@ class TrainingDataProcessedInfo:
             if all(os.path.exists(file) for file in [midi_file, chord_file, key_file, beat_file]):
                 try:
                     song_info = SongInfo(key_file, midi_file, chord_file, beat_file)
-
-                    #bars = group_notes_by_bar(notes)
-                    #bar_timings = get_all_bar_timings(bars, 120)
-                    #bars_chords_mapped = assign_chords_to_bars(bar_timings, chord_timings)
-                    #notes_chord_assigned = assign_chord_to_notes(notes, chord_timings)
 
                     # Skip songs in minor keys for now
                     if song_info.song_key.get_type() == 'min':
