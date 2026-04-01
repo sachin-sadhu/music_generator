@@ -5,6 +5,7 @@ from SongInfo import TrainingDataProcessedInfo, OrnamentGrouping, OrnamentNote
 from music21 import corpus, instrument
 from Rhythm import RhythmHMM
 from music21 import stream, note, tempo, instrument
+from config import *
 
 if TYPE_CHECKING:
     from Note import TrainingNote
@@ -142,7 +143,6 @@ class OrnamentMC:
 
     def generate(self, skeleton_note_index, current_note_index):
         # Last time this MC was used was before current skeleotn note index. therefore need to sample new note
-        print(f'last time mc was used was {self.recent_index_used}. current skeelton note index: {skeleton_note_index}. current note index: {current_note_index}')
         if self.recent_index_used < skeleton_note_index:
             emission = self.sample_initial_state()
             print(f'sampling from initila')
@@ -175,7 +175,7 @@ class MusicGen:
         score = stream.Score()
         treble = stream.Part()
         treble.append(instrument.Piano())
-        treble.append(tempo.MetronomeMark(number=80))
+        treble.append(tempo.MetronomeMark(number=METRONOME_80_BPM))
         bass = stream.Part()
         bass.append(instrument.Piano())
 
@@ -183,20 +183,20 @@ class MusicGen:
         for i in range(len(bass_notes)-1):
             pitch, onset = bass_notes[i]
             n = note.Note(pitch)
-            n.quarterLength = 2
+            n.quarterLength = MINIM_DURATION_CROTCHET
             bass.append(n)
 
             _, next_note_onset = bass_notes[i+1]
-            if next_note_onset != (onset + 8):
-                rest_duration = next_note_onset - onset - 8
+            if next_note_onset != (onset + STEPS_PER_BEAT * 2):
+                rest_duration = next_note_onset - onset - STEPS_PER_BEAT * 2
                 r = note.Rest()
-                r.quarterLength = rest_duration / 4
+                r.quarterLength = rest_duration / STEPS_PER_BEAT
                 bass.append(r)
 
         # Add last bass note
         pitch, _ = bass_notes[-1]
         n = note.Note(pitch)
-        n.quarterLength = 2
+        n.quarterLength = MINIM_DURATION_CROTCHET
         bass.append(n)
 
         # Add melody notes to treble clef
@@ -205,7 +205,7 @@ class MusicGen:
             pitch = curr_note['pitch']
             n = note.Note(pitch)
             duration = curr_note['end'] - curr_note['start']
-            n.quarterLength = duration / 4  # Duration in quarter notes
+            n.quarterLength = duration / STEPS_PER_BEAT  # Duration in quarter notes
             treble.append(n)
 
             next_note = melody[i+1]
@@ -213,7 +213,7 @@ class MusicGen:
                 # Need a rest!
                 rest_duration = next_note['start'] - curr_note['end']
                 r = note.Rest()
-                r.quarterLength = rest_duration / 4
+                r.quarterLength = rest_duration / STEPS_PER_BEAT
                 treble.append(r)
 
         # Add last treble clef note
@@ -221,7 +221,7 @@ class MusicGen:
         pitch = last_note['pitch']
         n = note.Note(pitch)
         duration = last_note['end'] - last_note['start']
-        n.quarterLength = duration / 4  # Duration in quarter notes
+        n.quarterLength = duration / STEPS_PER_BEAT  # Duration in quarter notes
         treble.append(n)
         
         score.append(treble)
@@ -250,7 +250,7 @@ class MusicGen:
             ## Check if on strong beat position
             if i % 8 == 0:
                 ## Need to start playing a fresh note
-                if sampled_rhythm[i] == 0:
+                if sampled_rhythm[i] == NOTE_ONSET:
                     # Check if ornament note or skeelton note
                     end_index = i + 1
                     while (end_index < len(sampled_rhythm) and sampled_rhythm[end_index] == 1):
@@ -272,19 +272,19 @@ class MusicGen:
                     # Generate cooresponding bass note
                     bass_note_chord_tone = self.bass_generator.get_bass_note(skeleton_note.note_chord_tone)
                     print(f' skeleton note: chord function: {skeleton_note.chord_function} trelle chord tone: {skeleton_note.note_chord_tone} bass note chord tone: {bass_note_chord_tone}')
-                    bass_note_midi_pitch = SkeletonEmission(bass_note_chord_tone, skeleton_note.chord_function).calc_midi_pitch(key) - 12
+                    bass_note_midi_pitch = SkeletonEmission(bass_note_chord_tone, skeleton_note.chord_function).calc_midi_pitch(key) - OCTAVE_SEMITONES
                     bass.append((bass_note_midi_pitch, i))
-                elif sampled_rhythm[i] == 1 or sampled_rhythm[i] == 2:
+                elif sampled_rhythm[i] == NOTE_CONTINUE or sampled_rhythm[i] == NOTE_REST:
                     # Sustaining previous note or rest on this strong beat
                     if sampled_beats:
                         skeleton_note = sampled_beats.pop(0)
                         # Generate cooresponding bass note
                         bass_note_chord_tone = self.bass_generator.get_bass_note(skeleton_note.note_chord_tone)
-                        bass_note_midi_pitch = SkeletonEmission(bass_note_chord_tone, skeleton_note.chord_function).calc_midi_pitch(key) - 12
+                        bass_note_midi_pitch = SkeletonEmission(bass_note_chord_tone, skeleton_note.chord_function).calc_midi_pitch(key) - OCTAVE_SEMITONES
                         bass.append((bass_note_midi_pitch, i))
             else:
                 # need an ornament note first check to see whether we need to generate a new note or note
-                if sampled_rhythm[i] == 0:
+                if sampled_rhythm[i] == NOTE_ONSET:
                     # check to see if ornament note pitch has already been decided
                     if i in self.fixed_ornament_note_pitches:
                         midi_pitch = self.fixed_ornament_note_pitches[i].calc_midi_pitch(key)
@@ -316,12 +316,11 @@ class MusicGen:
 
                             if len(melody) > 0:
                                 midi_pitch = melody[-1]['pitch'] + ornament_note_offset
-                                #midi_pitch = max(40, min(midi_pitch, 80))
                             else:
                                 midi_pitch = previous_skeleton_note_pitch
 
                     end_index = i + 1
-                    while (end_index < len(sampled_rhythm) and sampled_rhythm[end_index] == 1):
+                    while (end_index < len(sampled_rhythm) and sampled_rhythm[end_index] == NOTE_CONTINUE):
                         end_index += 1
 
                     note = {
@@ -344,7 +343,7 @@ class MusicGen:
         next_strong_beat_index = current_index + 1
         found_strong_beat = False
         while (not found_strong_beat and next_strong_beat_index < len(sampled_rhythm)):
-            if next_strong_beat_index % 8 == 0:
+            if next_strong_beat_index % (STEPS_PER_BEAT * 2) == 0:
                 found_strong_beat = True
                 break
             else:
@@ -354,13 +353,13 @@ class MusicGen:
             raise ValueError("no next strong beat found")
 
         # Note being generated at the strong beat
-        if sampled_rhythm[next_strong_beat_index] == 0:
+        if sampled_rhythm[next_strong_beat_index] == NOTE_ONSET:
             return skeleton_notes[0]
-        elif sampled_rhythm[next_strong_beat_index] == 1:
+        elif sampled_rhythm[next_strong_beat_index] == NOTE_ONSET:
             # note is being sustained, figure out index of note that will sustain it
             sustained_note_index = next_strong_beat_index-1
             while sustained_note_index >= 0:
-                if sampled_rhythm[sustained_note_index] == 0:
+                if sampled_rhythm[sustained_note_index] == NOTE_ONSET:
                     break
                 else:
                     sustained_note_index -= 1
@@ -383,7 +382,7 @@ class MusicGen:
         recent_strong_beat_index = current_index - 1
         found_strong_beat = False
         while (not found_strong_beat and recent_strong_beat_index >= 0):
-            if recent_strong_beat_index % 8 == 0:
+            if recent_strong_beat_index % (STEPS_PER_BEAT * 2) == NOTE_ONSET:
                 found_strong_beat = True
                 break
             else:
@@ -393,17 +392,17 @@ class MusicGen:
             raise ValueError("no previous skeleton note found")
 
         # Check if this strong beat was a 1 (new note) or 2 (sustained pitch from previous note)
-        if sampled_rhythm[recent_strong_beat_index] == 0:
+        if sampled_rhythm[recent_strong_beat_index] == NOTE_ONSET:
             for note in reversed(current_melody):
                 if note['start'] == recent_strong_beat_index:
                     return note, recent_strong_beat_index
-        elif sampled_rhythm[recent_strong_beat_index] == 1:
+        elif sampled_rhythm[recent_strong_beat_index] == NOTE_ONSET:
             # note was sustained from somewhere else, need to find note responsible for it 
             # by searching to the left somemore for the most recent 1 note
             recent_new_note_index = recent_strong_beat_index - 1
             found_new_note = False
             while (not found_new_note and recent_new_note_index >= 0):
-                if sampled_rhythm[recent_new_note_index] == 1:
+                if sampled_rhythm[recent_new_note_index] == NOTE_ONSET:
                     found_new_note = True
                     break
                 else:
@@ -424,23 +423,8 @@ class MusicGen:
         """
 
         key_name = key.name
-        # Define key scales (notes to keep)
-        KEY_SCALES = {
-            'A:maj': [9, 11, 1, 2, 4, 6, 8],      # A, B, C#, D, E, F#, G#
-            'C:maj': [0, 2, 4, 5, 7, 9, 11],      # C, D, E, F, G, A, B
-            'D:maj': [2, 4, 6, 7, 9, 11, 1],      # D, E, F#, G, A, B, C#
-            'G:maj': [7, 9, 11, 0, 2, 4, 6],      # G, A, B, C, D, E, F#
-            # Add more keys as needed
-        }
         
         # Define tritones from tonic (notes to absolutely avoid)
-        TRITONES = {
-            'A:maj': 3,   # D#/Eb
-            'C:maj': 6,   # F#/Gb  
-            'D:maj': 8,   # G#/Ab
-            'G:maj': 1,   # C#/Db
-        }
-        
         if key_name not in KEY_SCALES:
             return notes  # Skip processing if key not defined
         
@@ -448,7 +432,7 @@ class MusicGen:
         tritone = TRITONES.get(key_name)
         
         for note in notes:
-            pitch_class = note['pitch'] % 12
+            pitch_class = note['pitch'] % OCTAVE_SEMITONES
             # Check if its tritone
             if pitch_class == tritone:
                 # Move tritone to nearest safe note
@@ -492,7 +476,6 @@ class BassGen:
             if soprano_note is None or bass_note is None:
                 continue
             emission_count[soprano_note][bass_note] += 1
-
 
         emission_probs = {}
         for soprano_note in emission_count.keys():
@@ -582,22 +565,7 @@ class BassGen:
 
         interval = (note_pc - root_pc) % 12
 
-        interval_map = {
-                0: "root", 
-                1: "b2", 
-                2: "2nd", 
-                3: "b3",   # minor 3rd
-                4: "3rd",  # major 3rd
-                5: "4th",
-                6: "b5",   # tritone
-                7: "5th", 
-                8: "b6",   # minor 6th
-                9: "6th",  # major 6th
-                10: "b7",  # minor 7th
-                11: "7th"  # major 7th
-            }
-
-        return interval_map.get(interval, 'root')
+        return SCALE_DEGREE_NOTE_NAME_MAPPING.get(interval, 'root')
 
 class SkeletonEmission:
     def __init__(self, note_chord_tone, chord_function):
@@ -606,43 +574,11 @@ class SkeletonEmission:
         self.chord_function = chord_function
 
     def calc_midi_pitch(self, key: KeyTiming):
-        chromatic_intervals_inverted = {
-            "root": 0, "b2": 1, "2nd": 2, "b3": 3, "3rd": 4, "4th": 5,
-            "b5": 6, "5th": 7, "b6": 8, "6th": 9, "b7": 10, "7th": 11, "octave": 12
-        }
-
-        roman_numeral_to_semitones = {
-            'I': 0,   # Tonic (0 semitones above root)
-            'ii': 2,  # 2 semitones above root
-            'iii': 4, # 4 semitones above root
-            'IV': 5,  # 5 semitones above root
-            'V': 7,   # 7 semitones above root ← We need this!
-            'vi': 9,  # 9 semitones above root
-            'vii': 11 # 11 semitones above root
-        }
-
-        note_to_pitch_class = {
-            'C': 0, 
-            'C#': 1, 'Db': 1,
-            'D': 2,
-            'D#': 3, 'Eb': 3,
-            'E': 4,
-            'F': 5,
-            'F#': 6, 'Gb': 6,
-            'G': 7,
-            'G#': 8, 'Ab': 8,
-            'A': 9,
-            'A#': 10, 'Bb': 10,
-            'B': 11
-        }
-
-        # Get key information
         key_root_note = key.get_root_note()
         key_pitch_class = note_to_pitch_class.get(key_root_note, 0)
         chord_pitch_class = (key_pitch_class + roman_numeral_to_semitones.get(self.chord_function, 0)) % 12
-        interval = chromatic_intervals_inverted.get(self.note_chord_tone, 0)
+        interval = NOTE_NAME_TO_SCALE_DEGREE_MAPPING.get(self.note_chord_tone, 0)
         note_midi_pitch = (self.octave_offset + 1) * 12 + chord_pitch_class + interval
-
         return note_midi_pitch
 
 class ChordHMMThirdOrder:

@@ -3,6 +3,7 @@ import numpy as np
 from hmmlearn import hmm
 from sklearn.model_selection import KFold
 from collections import defaultdict
+from config import *
 import pickle
 import os
 import matplotlib.pyplot as plt
@@ -35,21 +36,21 @@ class RhythmHMM:
             return
 
         indicies_beat_mapping = {
-            0: ('note', 1), # semiqauver note
-            1: ('note', 2), # quaver note
-            2: ('note', 4), # crotchet note
-            3: ('note', 6), # dotted crotchet note
-            4: ('note', 8), # minim note
-            5: ('note', 12), # dotted minim note
-            6: ('note', 16), # semibreve note
+            NOTE_SEMIQUAVER: ('note', SEMIQUAVER_LENGTH), # semiqauver note
+            NOTE_QAUVER: ('note', QUAVER_LENGTH), # quaver note
+            NOTE_CROTCHET: ('note', CROTCHET_LENGTH), # crotchet note
+            NOTE_DOTTED_CROTCHET: ('note', DOTTED_CROTCHET_LENGTH), # dotted crotchet note
+            NOTE_MINIM: ('note', MINIM_LENGTH), # minim note
+            NOTE_DOTTED_MINIM: ('note', DOTTED_MINIM_LENGTH), # dotted minim note
+            NOTE_SEMIBREVE: ('note', SEMIBREVE_LENGTH), # semibreve note
 
-            7: ('rest', 1), # semiqauver rest
-            8: ('rest', 2), # quaver rest
-            9: ('rest', 4), # crotchet rest
-            10: ('rest', 6), # dotted crotchet rest
-            11: ('rest', 8), # minim rest
-            12: ('rest', 12), # dotted minim rest
-            13: ('rest', 16) # semibreve rest
+            REST_SEMIQUAVER: ('rest', SEMIQUAVER_LENGTH), # semiqauver rest
+            REST_QAUVER: ('rest', QUAVER_LENGTH), # quaver rest
+            REST_CROTCHET: ('rest', CROTCHET_LENGTH), # crotchet rest
+            REST_DOTTED_CROTCHET: ('rest', DOTTED_CROTCHET_LENGTH), # dotted crotchet rest
+            REST_MINIM: ('rest', MINIM_LENGTH), # minim rest
+            REST_DOTTED_MINIM: ('rest', DOTTED_MINIM_LENGTH), # dotted minim rest
+            REST_SEMIBREVE: ('rest', SEMIBREVE_LENGTH) # semibreve rest
         }
 
         sampled_sequence = []
@@ -57,26 +58,25 @@ class RhythmHMM:
         while num_notes_generated < num_notes:
             sequence = list(self.model.sample(num_notes)[0].flatten())
             sequence = [int(x) for x in sequence]
-            sequence = [indicies_beat_mapping.get(indicies, ('note', 1)) for indicies in sequence]
-            print(sequence)
+            sequence = [indicies_beat_mapping.get(indicies, ('note', SEMIQUAVER_LENGTH)) for indicies in sequence]
 
             for note_type, beat_duration in sequence:
                 if note_type == 'note':
-                    note_representation = 0
+                    note_representation = NOTE_ONSET
                     num_notes_generated += 1
                 else:
-                    note_representation = 2
+                    note_representation = NOTE_REST
 
                 if beat_duration == 1:
                     sampled_sequence.append(note_representation)
                 else:
-                    if note_representation == 0:
+                    if note_representation == NOTE_ONSET:
                         sampled_sequence.append(note_representation)
                         for _ in range(1, beat_duration):
-                            sampled_sequence.append(1)
+                            sampled_sequence.append(NOTE_CONTINUE)
                     else:
                         for _ in range(beat_duration):
-                            sampled_sequence.append(2)
+                            sampled_sequence.append(NOTE_REST)
 
             self.postprocess_rhythm_sequence(sampled_sequence)
 
@@ -85,11 +85,11 @@ class RhythmHMM:
         index = 0 
         while (new_notes_seen < num_notes and index < len(sampled_sequence)):
             # new note seen
-            if sampled_sequence[index] == 0:
+            if sampled_sequence[index] == NOTE_ONSET:
                 new_notes_seen += 1
             index += 1
 
-        while (index < len(sampled_sequence) and sampled_sequence[index] == 1):
+        while (index < len(sampled_sequence) and sampled_sequence[index] == NOTE_CONTINUE):
             index += 1
 
         return sampled_sequence[:index]
@@ -157,21 +157,21 @@ class RhythmHMM:
 
     def convert_to_num_beats(self, sequence):
         beat_indices_mapping = {
-            ('note', 1): 0, # semiqauver note
-            ('note', 2): 1, # quaver note
-            ('note', 4): 2, # crotchet note
-            ('note', 6): 3, # dotted crotchet note
-            ('note', 8): 4, # minim note
-            ('note', 12): 5, # dotted minim note
-            ('note', 16): 6, # semibreve note
+            ('note', SEMIQUAVER_LENGTH): NOTE_SEMIQUAVER, # semiqauver note
+            ('note', QUAVER_LENGTH): NOTE_QAUVER, # quaver note
+            ('note', CROTCHET_LENGTH): NOTE_CROTCHET, # crotchet note
+            ('note', DOTTED_CROTCHET_LENGTH): NOTE_DOTTED_CROTCHET, # dotted crotchet note
+            ('note', MINIM_LENGTH): NOTE_MINIM, # minim note
+            ('note', DOTTED_MINIM_LENGTH): NOTE_DOTTED_MINIM, # dotted minim note
+            ('note', SEMIBREVE_LENGTH): NOTE_SEMIBREVE, # semibreve note
 
-            ('rest', 1): 7, # semiqauver rest
-            ('rest', 2): 8, # quaver rest
-            ('rest', 4): 9, # crotchet rest
-            ('rest', 6): 10, # dotted crotchet rest
-            ('rest', 8): 11, # minim rest
-            ('rest', 12): 12, # dotted minim rest
-            ('rest', 16): 13 # semibreve rest
+            ('rest', SEMIQUAVER_LENGTH): REST_SEMIQUAVER, # semiqauver rest
+            ('rest', QUAVER_LENGTH): REST_QAUVER, # quaver rest
+            ('rest', CROTCHET_LENGTH): REST_CROTCHET, # crotchet rest
+            ('rest', DOTTED_CROTCHET_LENGTH): REST_DOTTED_CROTCHET, # dotted crotchet rest
+            ('rest', MINIM_LENGTH): REST_MINIM, # minim rest
+            ('rest', DOTTED_MINIM_LENGTH): REST_DOTTED_MINIM, # dotted minim rest
+            ('rest', SEMIBREVE_LENGTH): REST_SEMIBREVE # semibreve rest
         }
 
         def closest_duration(kind, duration):
@@ -182,26 +182,29 @@ class RhythmHMM:
         beat_sequence = []
         leftPointer = 0
         while leftPointer < len(sequence):
-            if sequence[leftPointer] == 0:
+            # New note onset
+            if sequence[leftPointer] == NOTE_ONSET:
+                # Last index is a new note
                 if leftPointer == len(sequence) - 1:
-                    beat_sequence.append(beat_indices_mapping.get(('note', 1), 0))
+                    beat_sequence.append(beat_indices_mapping.get(('note', SEMIQUAVER_LENGTH), 0))
                     break
                 else:
                     rightPointer = leftPointer + 1
-                    while rightPointer < len(sequence) and sequence[rightPointer] == 1:
+                    while rightPointer < len(sequence) and sequence[rightPointer] == NOTE_CONTINUE:
                         rightPointer += 1
                     note_beat_duration = rightPointer - leftPointer
                     note_beat_duration = closest_duration('note', note_beat_duration)
                     beat_sequence.append(beat_indices_mapping.get(('note', note_beat_duration), 0))
                     leftPointer = rightPointer
-
-            elif sequence[leftPointer] == 2:
+            # Rest note
+            elif sequence[leftPointer] == NOTE_REST:
+                # Last index is a rest note
                 if leftPointer == len(sequence) - 1:
-                    beat_sequence.append(beat_indices_mapping.get(('rest', 1), 0))
+                    beat_sequence.append(beat_indices_mapping.get(('rest', SEMIQUAVER_LENGTH), 0))
                     break
                 else:
                     rightPointer = leftPointer + 1
-                    while rightPointer < len(sequence) and sequence[rightPointer] == 2:
+                    while rightPointer < len(sequence) and sequence[rightPointer] == NOTE_REST:
                         rightPointer += 1
                     rest_beat_duration = rightPointer - leftPointer
                     rest_beat_duration = closest_duration('rest', rest_beat_duration)
@@ -214,11 +217,11 @@ class RhythmHMM:
 
     def filter_out_beginning_end_rests(self, sequence):
         start_index = 0
-        while start_index < len(sequence) and sequence[start_index] == 2:
+        while start_index < len(sequence) and sequence[start_index] == NOTE_REST:
             start_index += 1
 
         end_index = len(sequence) - 1
-        while end_index >= 0 and sequence[end_index] == 2:
+        while end_index >= 0 and sequence[end_index] == NOTE_REST:
             end_index -=1
 
         return sequence[start_index:end_index+1]
@@ -254,13 +257,13 @@ class RhythmHMM:
             offset_index = np.argmin(np.abs(np.array(grid) - note.end))
             notes.append((onset_index, offset_index))
 
-        sequence = np.full(m, 2) # default is silence
+        sequence = np.full(m, NOTE_REST) # default is silence
 
         for onset_index, offset_index, in notes:
             if onset_index < m:
                 sequence[onset_index] = 0 # note starting
                 for t in range(onset_index + 1, min(offset_index, m)):
-                    sequence[t] = 1 # sustatin note
+                    sequence[t] = NOTE_CONTINUE # continue note
 
         return sequence
 
@@ -352,15 +355,17 @@ class RhythmHMM:
         """
 
     def postprocess_rhythm_sequence(self, sequence):
-        for i, note_event in enumerate(sequence):
+        for i in range(len(sequence)):
+            # Set strong beat notes to be note onset
             if i % 8 == 0:
-                if note_event != 0:
-                    sequence[i] = 0
+                sequence[i] = NOTE_ONSET
 
         # fix occurence where it goes note onset, rest, noteonset 
         for i in range(len(sequence)-2):
-            if sequence[i] == 0 and sequence[i+1] == 2 and sequence[i+2] != 2:
-                sequence[i+1] = 1
+            if sequence[i] == NOTE_ONSET and sequence[i+1] == NOTE_REST and sequence[i+2] != NOTE_REST:
+                sequence[i+1] = NOTE_CONTINUE
+
+        return sequence
 
 def count_num_occurences(sequences):
     occurences = defaultdict(int)

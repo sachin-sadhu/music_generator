@@ -2,6 +2,7 @@ from mido import MidiFile, tick2second
 from Note import TrainingNote, OrnamentGrouping, OrnamentNote
 from ChordFunctions import *
 from Timings import BeatTiming, ChordTiming, KeyTiming
+from config import *
 import os
 
 class SongInfo:
@@ -17,8 +18,8 @@ class SongInfo:
                 line = line.strip()
                 parts = line.split('\t')
 
-                if len(parts) >= 3:
-                    key_name = parts[2]
+                if len(parts) >= NUM_KEY_PARTS:
+                    key_name = parts[KEY_NAME_INDEX]
                     return KeyTiming(key_name)
 
         raise ValueError("Song has invalid key.")
@@ -31,10 +32,10 @@ class SongInfo:
                 line = line.strip()
                 parts = line.split('\t')
 
-                if len(parts) >= 3:
-                    chord_start = parts[0]
-                    chord_end = parts[1]
-                    chord_label = parts[2]
+                if len(parts) >= NUM_CHORD_PARTS:
+                    chord_start = parts[CHORD_START_INDEX]
+                    chord_end = parts[CHORD_END_INDEX]
+                    chord_label = parts[CHORD_LABEL_INDEX]
 
                     chord = ChordTiming(chord_start, chord_end, chord_label)
                     chord_timings.append(chord)
@@ -50,7 +51,7 @@ class SongInfo:
         active_notes = {}
         current_tick = 0
 
-        for msg in midi.tracks[1]:
+        for msg in midi.tracks[MIDI_TRACK]:
             current_tick += msg.time
             current_seconds = tick2second(current_tick, ticks_per_beat, tempo)
 
@@ -75,7 +76,7 @@ class SongInfo:
                     tick_duration = current_tick - tick_onset
                     beat_duration = tick_duration / ticks_per_beat
                     note_duration = self.quantise_beat_duration(beat_duration)
-                    clef = 'treble' if msg.note >= 60 else 'bass'
+                    clef = 'treble' if msg.note >= TREBLE_MIDI_PITCH else 'bass'
                     chord = get_event_matching_chord(seconds_onset, self.chord_timings)
 
                     if clef == 'treble':
@@ -110,7 +111,6 @@ class SongInfo:
         closest = min(DURATION_BINS, key=lambda x: abs(x-quantised))
         return closest
 
-
     def load_beat_timings(self, beat_file_path) -> list[BeatTiming]:
         beats = []
         with open(beat_file_path, 'r') as f:
@@ -118,10 +118,10 @@ class SongInfo:
                 line = line.strip()
                 parts = line.split(' ')
 
-                if len(parts) >= 3:
-                    beat_time = float(parts[0])
-                    beat_strong_beat = float(parts[1])
-                    beat_new_bar = float(parts[2])
+                if len(parts) >= NUM_BEAT_PARTS:
+                    beat_time = float(parts[BEAT_TIME_INDEX])
+                    beat_strong_beat = float(parts[BEAT_STRONG_BEAT_INDEX])
+                    beat_new_bar = float(parts[BEAT_NEW_BAR_INDEX])
 
                     beat = BeatTiming(beat_time, beat_strong_beat, beat_new_bar)
                     beats.append(beat)
@@ -137,7 +137,7 @@ class SongInfo:
             for msg in track:
                 if msg.type == 'set_tempo':
                     return msg.tempo
-        return 500000  # Default: 120 BPM
+        return BPM_120_TICKS
 
 class TrainingDataProcessedInfo:
     def __init__(self):

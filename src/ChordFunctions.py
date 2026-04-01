@@ -1,6 +1,6 @@
 from __future__ import annotations
-
 from typing import TYPE_CHECKING
+from config import note_to_pitch_class, pitch_class_to_note, roman_numeral_to_semitones, root_to_degree
 
 if TYPE_CHECKING:
     from Timings import ChordTiming, KeyTiming
@@ -13,7 +13,7 @@ def get_event_matching_chord(onset_seconds, chord_timings: list[ChordTiming]) ->
 
 def calc_semitones_to_c(note: str):
     """
-    Calculate the number of semitones needed to transpose a given note to C.
+    Calculate the number of semitones up to the next C note.
 
     Args:
         note (str): A musical note name (e.g., 'C', 'C#', 'Db', 'D', etc.)
@@ -24,21 +24,6 @@ def calc_semitones_to_c(note: str):
     Raises:
         KeyError: If the provided note is not a valid note name
     """
-    note_to_pitch_class = {
-        'C': 0, 
-        'C#': 1, 'Db': 1,
-        'D': 2,
-        'D#': 3, 'Eb': 3,
-        'E': 4,
-        'F': 5,
-        'F#': 6, 'Gb': 6,
-        'G': 7,
-        'G#': 8, 'Ab': 8,
-        'A': 9,
-        'A#': 10, 'Bb': 10,
-        'B': 11
-    }
-
     shift = (0 - note_to_pitch_class[note]) % 12
     return shift
 
@@ -56,30 +41,9 @@ def transpose_note(note: str, semitones_to_shift: int):
     Raises:
         KeyError: If chord_root_note is not a valid note name.
     """
-    note_to_pitch_class = {
-        'C': 0, 
-        'C#': 1, 'Db': 1,
-        'D': 2,
-        'D#': 3, 'Eb': 3,
-        'E': 4,
-        'F': 5,
-        'F#': 6, 'Gb': 6,
-        'G': 7,
-        'G#': 8, 'Ab': 8,
-        'A': 9,
-        'A#': 10, 'Bb': 10,
-        'B': 11
-    }
-
-    pitch_class_to_note = {
-        0: 'C', 1: 'C#', 2: 'D', 3: 'D#', 4: 'E', 5: 'F', 6: 'F#',
-        7: 'G', 8: 'G#', 9: 'A', 10: 'A#', 11: 'B'
-    }
 
     current_pitch_class = note_to_pitch_class[note]
-
     shifted_pitch_class = (current_pitch_class + semitones_to_shift) % 12
-
     return pitch_class_to_note[shifted_pitch_class]
 
 def get_key_root_and_type(key: str):
@@ -157,40 +121,10 @@ def get_chord_name_in_original_key(roman_numeral: str, key: KeyTiming):
         >>> get_chord_name_in_original_key('ii', 'G')
         'A:min'
     """
-    roman_numeral_to_semitones = {
-        'I': 0,   # Tonic (0 semitones above root)
-        'ii': 2,  # 2 semitones above root
-        'iii': 4, # 4 semitones above root
-        'IV': 5,  # 5 semitones above root
-        'V': 7,   # 7 semitones above root ← We need this!
-        'vi': 9,  # 9 semitones above root
-        'vii': 11 # 11 semitones above root
-    }
-
-    note_to_pitch_class = {
-        'C': 0, 
-        'C#': 1, 'Db': 1,
-        'D': 2,
-        'D#': 3, 'Eb': 3,
-        'E': 4,
-        'F': 5,
-        'F#': 6, 'Gb': 6,
-        'G': 7,
-        'G#': 8, 'Ab': 8,
-        'A': 9,
-        'A#': 10, 'Bb': 10,
-        'B': 11
-    }
-
     key_root_note = key.get_root_note()
     key_root_note_number = note_to_pitch_class[key_root_note]
     scale_num_semitones = roman_numeral_to_semitones[roman_numeral]
     chord_pitch_class = (key_root_note_number + scale_num_semitones) % 12
-
-    pitch_class_to_note = {
-        0: 'C', 1: 'C#', 2: 'D', 3: 'D#', 4: 'E', 5: 'F', 6: 'F#',
-        7: 'G', 8: 'G#', 9: 'A', 10: 'A#', 11: 'B'
-    }
 
     chord_root_name = pitch_class_to_note[chord_pitch_class]
     chord_type = get_chord_type_from_roman_numeral(roman_numeral)
@@ -246,44 +180,7 @@ def convert_chord_name_to_roman_numeral(chord_name: str):
         return 'N'
 
     root_note = chord_name.split(':')[0]
-    root_to_degree = {
-        'C': 'I',
-        'D': 'ii',
-        'E': 'iii',
-        'F': 'IV',
-        'G': 'V',
-        'A': 'vi',
-        'B': 'vii',
-    }
-
     if root_note not in root_to_degree:
         raise ValueError(f"Invalid root note: {root_note}")
 
     return root_to_degree[root_note]
-
-def get_chord_tones(chord: ChordTiming):
-    CHORD_TEMPLATES = {
-        'C:maj': [0, 4, 7],
-        'C:min': [0, 3, 7],
-        'D:min': [2, 5, 9],
-        'D:maj': [2, 6, 9],
-        'E:min': [4, 7, 11],
-        'E:maj': [4, 8, 11],
-        'F:maj': [5, 9, 0],
-        'F:min': [5, 8, 0],
-        'G:maj': [7, 11, 2],
-        'G:min': [7, 10, 2],
-        'A:min': [9, 0, 4],
-        'A:maj': [9, 1, 4],
-        'B:min': [11, 2, 6],
-        'B:maj': [11, 3, 6],
-        'B:dim': [11, 2, 5],
-        'G:7': [7, 11, 2, 5]
-    }
-
-    chord_name = chord.get_name()
-
-    if chord_name not in CHORD_TEMPLATES:
-        return []
-    
-    return CHORD_TEMPLATES[chord_name]
