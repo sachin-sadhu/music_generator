@@ -1,7 +1,6 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
-from config import note_to_pitch_class, pitch_class_to_note, roman_numeral_to_semitones, root_to_degree
-
+from config import *
 if TYPE_CHECKING:
     from Timings import ChordTiming, KeyTiming
 
@@ -24,7 +23,7 @@ def calc_semitones_to_c(note: str):
     Raises:
         KeyError: If the provided note is not a valid note name
     """
-    shift = (0 - note_to_pitch_class[note]) % 12
+    shift = (0 - note_to_pitch_class[note]) % OCTAVE_SEMITONES
     return shift
 
 def transpose_note(note: str, semitones_to_shift: int):
@@ -43,7 +42,7 @@ def transpose_note(note: str, semitones_to_shift: int):
     """
 
     current_pitch_class = note_to_pitch_class[note]
-    shifted_pitch_class = (current_pitch_class + semitones_to_shift) % 12
+    shifted_pitch_class = (current_pitch_class + semitones_to_shift) % OCTAVE_SEMITONES
     return pitch_class_to_note[shifted_pitch_class]
 
 def get_key_root_and_type(key: str):
@@ -124,7 +123,7 @@ def get_chord_name_in_original_key(roman_numeral: str, key: KeyTiming):
     key_root_note = key.get_root_note()
     key_root_note_number = note_to_pitch_class[key_root_note]
     scale_num_semitones = roman_numeral_to_semitones[roman_numeral]
-    chord_pitch_class = (key_root_note_number + scale_num_semitones) % 12
+    chord_pitch_class = (key_root_note_number + scale_num_semitones) % OCTAVE_SEMITONES
 
     chord_root_name = pitch_class_to_note[chord_pitch_class]
     chord_type = get_chord_type_from_roman_numeral(roman_numeral)
