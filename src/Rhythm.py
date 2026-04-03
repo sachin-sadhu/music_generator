@@ -7,6 +7,7 @@ from config import *
 import pickle
 import os
 import matplotlib.pyplot as plt
+import time
 
 class RhythmHMM:
     def __init__(self) -> None:
@@ -30,6 +31,10 @@ class RhythmHMM:
         with open(filename, 'rb') as f:
             return pickle.load(f)
 
+    """
+        Function that will be called that generates a sequence of semiquaver event time steps
+        representing note events. 
+    """
     def generate_rhythm_sequence(self, num_notes):
         if not self.trained:
             print('please train the model first')
@@ -56,9 +61,11 @@ class RhythmHMM:
         sampled_sequence = []
         num_notes_generated = 0
         while num_notes_generated < num_notes:
-            sequence = list(self.model.sample(num_notes)[0].flatten())
+            sequence = list(self.model.sample(num_notes, random_state=int(time.time()))[0].flatten())
             sequence = [int(x) for x in sequence]
+            print(f'generated sequence: {sequence}')
             sequence = [indicies_beat_mapping.get(indicies, ('note', SEMIQUAVER_LENGTH)) for indicies in sequence]
+            print(f'mapped notes: {sequence}')
 
             for note_type, beat_duration in sequence:
                 if note_type == 'note':
@@ -92,8 +99,12 @@ class RhythmHMM:
         while (index < len(sampled_sequence) and sampled_sequence[index] == NOTE_CONTINUE):
             index += 1
 
+        print(f'full sequence: {sampled_sequence[:index]}')
         return sampled_sequence[:index]
 
+    """
+        Helper function used to load the data and split it into training, val and testing sets.
+    """
     def load_data(self, data_dir):
         print('loading data...')
         unprocessed_song_sequences = self.extract_sequences_from_dataset(data_dir)
@@ -107,6 +118,9 @@ class RhythmHMM:
         self.loaded_data = True
         print(f'data loaded.')
 
+    """
+        Trains the HMM using Baum-Welch algorithm.
+    """
     def train_model(self, num_hidden_states=20, n_iter=1000, tol=1e-7):
         if not self.loaded_data:
             print('Please load the data before attempting to train the model.')
@@ -143,6 +157,9 @@ class RhythmHMM:
         self.model = best_model
         self.trained = True
 
+    """
+        Runs model.score on the testing set. Returns per note NLL
+    """
     def evaluate_model(self):
         if not self.trained:
             print('please train the model before attempting to evaluate it.')
@@ -215,6 +232,9 @@ class RhythmHMM:
                 leftPointer += 1
         return beat_sequence
 
+    """ 
+        Removes long sequences of rest bars from start/end of song.
+    """
     def filter_out_beginning_end_rests(self, sequence):
         start_index = 0
         while start_index < len(sequence) and sequence[start_index] == NOTE_REST:
@@ -267,6 +287,9 @@ class RhythmHMM:
 
         return sequence
 
+    """
+        Used to find otimal number of hidden states.
+    """
     def find_best_num_hidden_states(self, sequences):
         if not self.loaded_data:
             print('please load the training data first')
@@ -348,12 +371,6 @@ class RhythmHMM:
         testing_set = sequences[val_end:]
         return training_set, validation_set, testing_set
 
-        """
-            generates a rhuhthm sequence, where we watn num_notes number of notes
-        keeps on generating sequences until we have at least num_notes occurences of 0
-        then, we find the num_notes occurence of 0, find the end of that sustain of that note and splice the index according to that
-        """
-
     def postprocess_rhythm_sequence(self, sequence):
         for i in range(len(sequence)):
             # Set strong beat notes to be note onset
@@ -367,91 +384,15 @@ class RhythmHMM:
 
         return sequence
 
-def count_num_occurences(sequences):
-    occurences = defaultdict(int)
-    for sequence in sequences:
-        for event in sequence:
-            occurences[event] += 1
-
-    occurences_probs = defaultdict(float)
-    total_events = sum(occurences.values())
-    for event, count in occurences.items():
-        occurences_probs[event] = count / total_events
-
-    return occurences_probs
-
-def calculate_unigram_baseline_testing(test_sequence, event_probs_dict):
-    probs = [event_probs_dict[event[0]] for event in test_sequence]
-    normalised_ll = np.mean(np.log(probs))
-    return normalised_ll
-
-def calculate_unigram_baseline_training(train_sequence, event_probs_dict):
-    probs = []
-    for sequence in train_sequence:
-        for event in sequence:
-            probs.append(event_probs_dict[event])
-    normalised_ll = np.mean(np.log(probs))
-    return normalised_ll
-
-def train_markov_chain(train_sequences):
-    counts = defaultdict(lambda: defaultdict(int))
-    
-    for sequence in train_sequences:
-        for i in range(len(sequence) - 1):
-            counts[sequence[i]][sequence[i+1]] += 1
-    
-    # Convert to probabilities
-    transition_probs = {}
-    for state, next_states in counts.items():
-        total = sum(next_states.values())
-        transition_probs[state] = {k: v/total for k, v in next_states.items()}
-    
-    return transition_probs
-    
-def train_markov_chain_second_order(train_sequences):
-    counts = defaultdict(lambda: defaultdict(int))
-    
-    for sequence in train_sequences:
-        for i in range(len(sequence) - 2):
-            counts[(sequence[i], sequence[i+1])][sequence[i+2]] += 1
-    
-    # Convert to probabilities
-    transition_probs = {}
-    for state, next_states in counts.items():
-        total = sum(next_states.values())
-        transition_probs[state] = {k: v/total for k, v in next_states.items()}
-    
-    return transition_probs
-
-def markov_log_likelihood_second_order(test_sequences, transition_probs, smoothing=1e-10):
-    log_probs = []
-    
-    for sequence in test_sequences:
-        sequence = np.array(sequence).flatten()
-        for i in range(len(sequence) - 2):
-            curr, next_chord, next_next_chord = int(sequence[i]), int(sequence[i+1]), int(sequence[i+2])
-            prob = transition_probs.get((curr, next_chord), {}).get(next_next_chord, smoothing)
-            log_probs.append(np.log(prob))
-    
-    return np.mean(log_probs)
-
-def markov_log_likelihood(test_sequences, transition_probs, smoothing=1e-10):
-    log_probs = []
-    
-    for sequence in test_sequences:
-        sequence = np.array(sequence).flatten()
-        for i in range(len(sequence) - 1):
-            curr, next_chord = int(sequence[i]), int(sequence[i+1])
-            prob = transition_probs.get(curr, {}).get(next_chord, smoothing)
-            log_probs.append(np.log(prob))
-    
-    return np.mean(log_probs)
 
 if __name__ == "__main__":
     rhyhm_hmm = RhythmHMM()
     rhyhm_hmm.load_data('./POP909/POP909')
-    rhyhm_hmm.train_model()
-    rhyhm_hmm.save_model('models/20_hidden_state_class.pkl')
+    rhyhm_hmm.train_model(num_hidden_states=5)
+    rhyhm_hmm.save_model('models/rhythm_hmm_5.pkl')
+    #rhythm_hmm = RhythmHMM.load_model('models/rhythm_hmm.pkl')
+    #rhythm_hmm.generate_rhythm_sequence(20)
+    #print('\n')
 
     #unprocessed_song_sequences = extract_sequences_from_dataset('./POP909/POP909')
     #filtered_sequence = [filter_out_beginning_end_rests(sequence) for sequence in unprocessed_song_sequences]

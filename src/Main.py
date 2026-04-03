@@ -36,6 +36,7 @@ if __name__ == "__main__":
 
         model_output_dir = args.output
 
+        # Train all the different models
         for model in args.models:
             if model == "chordhmm":
                 print('Training ChordHMM...')
