@@ -5,6 +5,9 @@ from Timings import BeatTiming, ChordTiming, KeyTiming
 from config import *
 import os
 
+"""
+   Class that contains all relevant information about a certain song
+"""
 class SongInfo:
     def __init__(self, key_file_path, midi_file_path, chord_file_path, beat_file_path):
         self.song_key = self.load_key(key_file_path)
@@ -139,6 +142,9 @@ class SongInfo:
                     return msg.tempo
         return BPM_120_TICKS
 
+"""
+    Class used to store all the data about a training dataset.
+"""
 class TrainingDataProcessedInfo:
     def __init__(self):
         self.notes: list[TrainingNote] = []
@@ -165,7 +171,7 @@ class TrainingDataProcessedInfo:
                 try:
                     song_info = SongInfo(key_file, midi_file, chord_file, beat_file)
 
-                    # Skip songs in minor keys for now
+                    # Skip songs in minor keys
                     if song_info.song_key.get_type() == 'min':
                         continue
 
@@ -199,18 +205,10 @@ class TrainingDataProcessedInfo:
         self.beat_chords = all_song_beat_chords
         self.ornament_groupings = all_song_ornament_groupings
 
+    """
+    Creates ornament groupings for a given training data set
+    """
     def create_ornament_groupings(self, song_info: SongInfo) -> list[OrnamentGrouping]:
-        '''
-            want a note to be in the format note:{
-                                                    'role': 'blah',
-                                                    'offset': '+2',
-                                                    'note_duration': 'quaver'
-                                                }
-        '''
-
-        '''
-            want list to be in the format [(s1, s2), [ornament_notes], chord_function]
-        '''
         groupings = []
 
         notes = song_info.notes
@@ -259,6 +257,9 @@ class TrainingDataProcessedInfo:
         inbetween_notes = [note for note in notes if note1.get_start_seconds() < note.get_start_seconds() < note2.get_start_seconds()]
         return inbetween_notes
 
+    """
+        Creates a list of tuples of TrainingNote objects where each one is a note that falls on the first/third beat of a bar.  
+    """
     def group_strong_beat_pairs(self, notes, song_info: SongInfo) -> list[tuple[TrainingNote, TrainingNote]]:
         strong_bar_beats = [beat for beat in song_info.beat_timings if beat.is_strong_beat()]
         strong_bar_beats = sorted(strong_bar_beats, key=lambda beat: beat.get_onset_time())

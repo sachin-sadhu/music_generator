@@ -43,6 +43,21 @@ note_to_pitch_class = {
     'A': 9,
     'A#': 10, 'Bb': 10,
     'B': 11
+}      
+
+OCTAVE_4_NOTE_MIDI_PITCH_MAPPING = {
+            'C': 60,
+            'C#': 61, 'Db': 61,
+            'D': 62,
+            'D#': 63, 'Eb': 63,
+            'E': 64,
+            'F': 65,
+            'F#': 66, 'Gb': 66,
+            'G': 67,
+            'G#': 68, 'Ab': 68,
+            'A': 69,
+            'A#': 70, 'Bb': 70,
+            'B': 71
 }
 
 SCALE_DEGREE_NOTE_NAME_MAPPING = {
@@ -64,8 +79,6 @@ NOTE_NAME_TO_SCALE_DEGREE_MAPPING = {
     "root": 0, "b2": 1, "2nd": 2, "b3": 3, "3rd": 4, "4th": 5,
     "b5": 6, "5th": 7, "b6": 8, "6th": 9, "b7": 10, "7th": 11, "octave": 12
 }
-
-
 
 pitch_class_to_note = {
     0: 'C', 1: 'C#', 2: 'D', 3: 'D#', 4: 'E', 5: 'F', 6: 'F#',
@@ -118,16 +131,33 @@ METRONOME_80_BPM=80
 MINIM_DURATION_CROTCHET=2
 STEPS_PER_BEAT=4
 OCTAVE_SEMITONES=12      
+
 KEY_SCALES = {
-            'A:maj': [9, 11, 1, 2, 4, 6, 8],      # A, B, C#, D, E, F#, G#
-            'C:maj': [0, 2, 4, 5, 7, 9, 11],      # C, D, E, F, G, A, B
-            'D:maj': [2, 4, 6, 7, 9, 11, 1],      # D, E, F#, G, A, B, C#
-            'G:maj': [7, 9, 11, 0, 2, 4, 6],      # G, A, B, C, D, E, F#
-}  
+    'C:maj':  [0, 2, 4, 5, 7, 9, 11],   # C, D, E, F, G, A, B
+    'G:maj':  [7, 9, 11, 0, 2, 4, 6],   # G, A, B, C, D, E, F#
+    'D:maj':  [2, 4, 6, 7, 9, 11, 1],   # D, E, F#, G, A, B, C#
+    'A:maj':  [9, 11, 1, 2, 4, 6, 8],   # A, B, C#, D, E, F#, G#
+    'E:maj':  [4, 6, 8, 9, 11, 1, 3],   # E, F#, G#, A, B, C#, D#
+    'B:maj':  [11, 1, 3, 4, 6, 8, 10],  # B, C#, D#, E, F#, G#, A#
+    'F#:maj': [6, 8, 10, 11, 1, 3, 5],  # F#, G#, A#, B, C#, D#, E#
+    'Db:maj': [1, 3, 5, 6, 8, 10, 0],   # Db, Eb, F, Gb, Ab, Bb, C
+    'Ab:maj': [8, 10, 0, 1, 3, 5, 7],   # Ab, Bb, C, Db, Eb, F, G
+    'Eb:maj': [3, 5, 7, 8, 10, 0, 2],   # Eb, F, G, Ab, Bb, C, D
+    'Bb:maj': [10, 0, 2, 3, 5, 7, 9],   # Bb, C, D, Eb, F, G, A
+    'F:maj':  [5, 7, 9, 10, 0, 2, 4],   # F, G, A, Bb, C, D, E
+}
 
 TRITONES = {
-            'A:maj': 3,   # D#/Eb
-            'C:maj': 6,   # F#/Gb  
-            'D:maj': 8,   # G#/Ab
-            'G:maj': 1,   # C#/Db
-        }
+    'C:maj':  6,   # F#/Gb  — tritone above C
+    'G:maj':  1,   # C#/Db  — tritone above G
+    'D:maj':  8,   # G#/Ab  — tritone above D
+    'A:maj':  3,   # D#/Eb  — tritone above A
+    'E:maj':  10,  # A#/Bb  — tritone above E
+    'B:maj':  5,   # F      — tritone above B
+    'F#:maj': 0,   # C      — tritone above F#
+    'Db:maj': 7,   # G      — tritone above Db
+    'Ab:maj': 2,   # D      — tritone above Ab
+    'Eb:maj': 9,   # A      — tritone above Eb
+    'Bb:maj': 4,   # E      — tritone above Bb
+    'F:maj':  11,  # B      — tritone above F
+}
